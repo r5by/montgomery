@@ -7,15 +7,16 @@ class TestMontgomeryOperations(unittest.TestCase):
     def setUp(self):
 
         RADOMIZED = 1
+        num_primes = 10  # num of primes >= num of domains; change this shall delete the data file to regenerate primes
 
         if RADOMIZED:
             filename = 'm_primes.data'
-            num_primes = 5  # p for Z_p : change this shall delete the data file to regenerate primes
+            domains = 7  # p for Z_p :
             self.num_count = 100  # randomly generated repr. numbers in Z_p
         else:
             # fixed
             filename = 't_primes.data'
-            num_primes = 1
+            domains = 1
             self.num_count = 10
 
         if not os.path.exists(filename):
@@ -25,7 +26,23 @@ class TestMontgomeryOperations(unittest.TestCase):
         else:
             large_primes = load_primes_from_file(filename)
 
-        self.monts = [Montgomery(mod=large_primes[i]) for i in range(num_primes)]
+        self.monts = [Montgomery.factory(mod=large_primes[i]).build() for i in range(domains)]
+
+        # real-1
+        self.monts[1].config('real1').build()
+
+        # real-2
+        # self.monts[2].config('real2').build(R=1 << nextp2(self.monts[2].N).bit_length() + 2)
+        self.monts[2].config('real2').build(n=nextp2(self.monts[2].N).bit_length() + 2)
+
+        # real-4
+        mont4 = Montgomery.factory(mod=large_primes[3], mul_opt='real4').build(m=4)
+        self.monts[4] = mont4
+
+        # real-5
+        mont5 = Montgomery.factory(mod=large_primes[4], mul_opt='real5').build(m=8)
+        self.monts[5] = mont5
+
         self.rands = random_list(low=2, high=max(large_primes), count=self.num_count)
 
     def test_domain(self):
@@ -44,6 +61,26 @@ class TestMontgomeryOperations(unittest.TestCase):
                 x_ = int(x_mont)
                 self.assertEqual(x_, x % mont.N)
 
+    #region Toggle on only for small montgomery domains
+    # def test_mont_constant(self):
+    #
+    #     for mont in self.monts:
+    #
+    #         p = mont.N
+    #
+    #         for w in range(1, p):
+    #             r = 1 << w
+    #
+    #             _, N_, _ = xgcd(r, p)
+    #             exp = -N_
+    #
+    #             if exp < 0:  # NOTE here, should use mod r!
+    #                 exp += r
+    #
+    #             act = mont.mont_const(w)
+    #             self.assertEqual(exp, act)
+    #endregion
+
     def test_multiplication(self):
 
         for i in range(self.num_count - 1):
@@ -60,9 +97,8 @@ class TestMontgomeryOperations(unittest.TestCase):
 
                 # Direct addition and reduction
                 exp = mont((a * b) % p)
-                exp1 = mont(mont.REDC(a) * b % p)
-                exp2 = mont(a * mont.REDC(b) % p)
-
+                exp1 = mont(mont.exit_domain(a) * b % p)
+                exp2 = mont(a * mont.exit_domain(b) % p)
 
                 self.assertEqual(act, exp)
                 self.assertEqual(act1, exp1)
@@ -81,8 +117,8 @@ class TestMontgomeryOperations(unittest.TestCase):
 
                 # Direct addition and reduction
                 exp = mont((a + b) % mont.N)
-                exp1 = mont((mont.REDC(a) + b) % mont.N)
-                exp2 = mont((a + mont.REDC(b)) % mont.N)
+                exp1 = mont((mont.exit_domain(a) + b) % mont.N)
+                exp2 = mont((a + mont.exit_domain(b)) % mont.N)
 
                 self.assertEqual(act, exp)
                 self.assertEqual(act1, exp1)
@@ -117,15 +153,6 @@ class TestMontgomeryOperations(unittest.TestCase):
                 self.assertEqual(act, exp)
 
     def test_inversion(self):
-        # todo> remove
-        # p = 61
-        # a = 1
-        # mont = Montgomery(mod=p)
-        # a_mont = mont(a)
-        # a_, _, _ = xgcd(a, p)
-        # t = bin_inv(a, p)
-        # exp = mont(t)
-        # act = 1 / a_mont
 
         for num in self.rands:
             # print(f'testing number: {num}')
@@ -158,15 +185,14 @@ class TestMontgomeryOperations(unittest.TestCase):
                 # Direct addition and reduction
                 b_inv = bin_inv(b, p)
                 exp = mont((a * b_inv) % p)
-                exp1 = mont((mont.REDC(a) * b_inv) % p)
+                exp1 = mont((mont.exit_domain(a) * b_inv) % p)
 
-                b_inv2 = bin_inv(mont.REDC(b), p)
+                b_inv2 = bin_inv(mont.exit_domain(b), p)
                 exp2 = mont((a * b_inv2) % p)
 
                 self.assertEqual(act, exp)
                 self.assertEqual(act1, exp1)
                 self.assertEqual(act2, exp2)
-
 
 
 # Rerun the corrected unit tests with refined calculations
