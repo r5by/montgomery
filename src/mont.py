@@ -13,23 +13,31 @@ from common import *
 import math
 
 
+# Constants
+REG_SIZE = 256  # the register size in bits
+
+
 class Montgomery:
     def __init__(self):
 
-        self._N: Optional[int] = None  # modulo
+        self._N: Optional[int] = None  # modulo, stated as "M" in [2]
 
-        self.__n: Optional[int] = None  # _R = 2 ** __n; (>>__n) substitutes for (/R) operation
+        self.__n: Optional[int] = None  # 2 ** __n > modulo, stated as "N" in [2]
         self._R: Optional[int] = None  # R > N and is a power of 2 (the smallest power of 2 greater than N by default)
         self.__RMASK: Optional[int] = None  # (&__RMASK) substitutes for (%R) operation
 
         self.__m: Optional[int] = None
         self.__r: Optional[int] = None  # r = 2**m, radix.
 
+        self._w: Optional[int] = None  # a word contains w bits, used for multiple word scenarios
+
         self.mul_opt: Optional[str] = None  # multiplication method configuration (can choose various implementations)
         self.mul = None  # the method
 
         # multiplication algorithm (realization specific)
+        self.e: Optional[int] = None  # real-3 specific
         self.n_m: Optional[int] = None  # real-4 specific, R=r**n_m, where r=2**m is the radix
+        self.d: Optional[int] = None  # real-5 specific
 
     @classmethod
     def factory(cls, mod: int, mul_opt: str = 'real1') -> 'Montgomery':
@@ -44,6 +52,7 @@ class Montgomery:
 
     @property
     def N(self):
+        # As the 'M' stated in [2]
         return self._N
 
     @N.setter
@@ -62,17 +71,17 @@ class Montgomery:
             raise ValueError("R must be a power of 2.")
         self._R = value
         self.__RMASK = self._R - 1
-        self.__n = self._R.bit_length() - 1
 
     @property
     def n(self):
+        # As the 'N' stated in [2]
         return self.__n
 
     @n.setter
     def n(self, value):
+        if value is not None and (1 << value) < self.N:
+            raise ValueError("The modulo must be smaller than 2**n")
         self.__n = value
-        self._R = 1 << self.__n
-        self.__RMASK = self._R - 1
 
     @property
     def m(self):
@@ -92,15 +101,29 @@ class Montgomery:
         self.__r = value
         self.__m = self.__r.bit_length() - 1
 
+    @property
+    def w(self):
+        return self._w
+
+    @w.setter
+    def w(self, value):
+        self._w = value
+
     def build(self, **kwargs: Union[int, str]) -> 'Montgomery':
 
         # Default properties
-        self.n = self.N.bit_length()  # R=2**n
-        self.m = self.n  # r = 2**m
+        self.n = self.N.bit_length()
+        self.R = 1 << self.n
+        self.m = self.n  # auto: r = 2**m
+
+        if self.mul_opt != 'real1' and not kwargs:
+            raise ValueError(f'For multiplication realizations other than the default, current: {self.mul_opt}, '
+                             f'requires more input arguments.')
 
         # todo>
         for key, value in kwargs.items():
-            if self.mul_opt == 'real1' or self.mul_opt == 'real2':
+            if (self.mul_opt == 'real1'
+                    or self.mul_opt == 'real2'):
                 if 'R' not in kwargs and 'n' not in kwargs:
                     raise ValueError(f'R (or its power) must be specified for realization 1 or 2.')
 
@@ -109,15 +132,33 @@ class Montgomery:
 
                 if key == "R":
                     self.R = value
+                    self.n = value.bit_length() - 1
                 elif key == "n":
                     self.n = value
+                    self.R = 1 << value
 
                 # update radix for mont constant
                 self.m = self.n
                 self.r = self.R
 
             elif self.mul_opt == 'real3':
-                pass
+                if 'w' not in kwargs:
+                    raise ValueError(f'Word length (in bits) must be specified in realization 3.')
+
+                if key != 'w':
+                    continue
+
+                if key == 'w':
+                    self.w = value
+
+                # update default values
+                self.n += 1
+                self.R = 1 << self.n  # update R to 2**{N+1}
+                self.e = math.ceil((self.n + 1) / self.w) + 1  # e = ceil((N+2)/w) + 1, where R=2**{N+1}
+
+                # update radix for mont constant
+                self.m = self.n
+                self.r = self.R
 
             elif self.mul_opt == 'real4':
                 if 'm' not in kwargs and 'r' not in kwargs:
@@ -137,7 +178,9 @@ class Montgomery:
                 self.n_m = math.ceil(self.n / self.m)
                 self.R = self.r ** self.n_m
 
-            elif self.mul_opt == 'real5':
+            elif (self.mul_opt == 'real5'
+                  or self.mul_opt == 'real6'
+                  or self.mul_opt == 'real7'):
                 if 'm' not in kwargs and 'r' not in kwargs:
                     raise ValueError(f' Radix r=2**m must be specified for realization 4 ')
 
@@ -152,7 +195,7 @@ class Montgomery:
 
                 # set-up R
                 self.d = math.ceil((self.n + self.m + 2) / self.m)
-                self.R = self.r ** (self.d - 1) # R = r^{d-1}
+                self.R = self.r ** (self.d - 1)  # R = r^{d-1}
 
         self.__pre_calc()  # Final pre-calculation after all settings
         return self
@@ -173,9 +216,10 @@ class Montgomery:
 
     def __pre_calc_R2(self):
         # Use (wn + 1) rounds of modulo addition to get R^2 % N, where R = 2^{wn}
-        # refer: <<Topics>> p.19
+        # refer: [3] p.19
         ci = self.R % self.N  # c0 = R
-        for _ in range(self.n):
+        wn = self.R.bit_length() - 1
+        for _ in range(wn):
             ci = (ci + ci) % self.N
 
         return ci
@@ -198,26 +242,31 @@ class Montgomery:
 
         return (1 << w) - y  # r - y
 
-    def config(self, mul_opt):
-        if mul_opt not in ['real1', 'real2', 'real3', 'real4', 'real5']:
-            raise ValueError("Unsupported configuration mode for multiplication.")
+    def config(self, mul_opt='real1'):
 
         if self.mul_opt == mul_opt:
             return self
 
         self.mul_opt = mul_opt
 
-        #todo>
         if mul_opt == 'real1':
             self.mul = self.real1_FPR2tN
         elif mul_opt == 'real2':
             self.mul = self.real2_FPR2t1
         elif mul_opt == 'real3':
-            pass
+            self.mul = self.real3_MWR2t1
         elif mul_opt == 'real4':
             self.mul = self.real4_FPR2tm
         elif mul_opt == 'real5':
             self.mul = self.real5_FPR2tm_v1
+        elif mul_opt == 'real6':
+            self.mul = self.real6_FPR2tm_v2
+        elif mul_opt == 'real7':
+            self.mul = self.real7_FPR2tm_v3
+        elif mul_opt == 'real8':
+            self.mul = self.real8_MWR2tm
+        else:
+            raise ValueError("Unsupported configuration mode for multiplication.")
 
         return self
 
@@ -231,8 +280,9 @@ class Montgomery:
         if u < 0 or u > self.R * self.N - 1:
             raise ValueError('Given number if out of montgomery reduction range')
 
+        n = self.R.bit_length() - 1
         k = u * self.N_ & self.__RMASK
-        t = (u + k * self.N) >> self.__n
+        t = (u + k * self.N) >> n
 
         return self.correction(t)
 
@@ -280,7 +330,7 @@ class Montgomery:
         '''corretion phase of montgomery inverse
         ref:  [1] Alg. 5
         '''
-        n, p = self.__n, self.N
+        n, p = self.R.bit_length() - 1, self.N
 
         j = 0
         while j < (n << 1) - k:
@@ -295,7 +345,7 @@ class Montgomery:
         '''corretion phase of forward/backward montgomery inversion
         ref:  [1] Alg. 5
         '''
-        n, p = self.__n, self.N
+        n, p = self.R.bit_length() - 1, self.N
 
         j = 0
         while j < k - n:
@@ -331,17 +381,57 @@ class Montgomery:
         :param b:
         :return:
         '''
-        X, Y, M = a, b, self.N
+        X, Y, M, N = a, b, self.N, self.n - 1
 
+        # zlist = []
         Z = 0
-        for i in range(self.n):
+        for i in range(N + 1):  # b.c. self.n = N+1 where R=2**(N+1) for N defined in the paper
             Zi = Z + X * ith_bit(Y, i)
 
             q = Zi & 1  # reason for q = Zi*M_%b, here since b=2, M_=1, b.c. ext(x, 2)=xx, 1 always holds.
             Zi = (Zi + q * M) >> 1
             Z = Zi
+            # zlist.append(Zi)
 
         return Z
+
+    def real3_MWR2t1(self, a: int, b: int) -> int:
+        # todo> fix this impl.
+
+        X, Y, M, N, w, e = a, b, self.N, self.n - 1, self.w, self.e
+
+        Z = [0 * w for _ in range(e + 1)]  # save Z[-1] as well
+        mask = (1 << w) - 1
+
+        for i in range(N + 1):
+            Ca = Cb = 0
+            Yi = ith_bit(Y, i)
+
+            q = 0  # dummy q init for the inner loops
+            for j in range(e):
+                Xj = ith_word(X, j, w)
+
+                # line(5)
+                CaZj = Z[j] + Xj * Yi + Ca
+                Ca = CaZj >> w
+                Z[j] = CaZj & mask
+
+                # lines(6,7)
+                if j == 0:
+                    q = Z[0] & 1
+
+                # line(9)
+                Mj = ith_word(M, j, w)
+                CbZj = Z[j] + q * Mj + Cb
+                Cb = CbZj >> w
+                Z[j] = CbZj & mask
+
+                # line(10)
+                Z[j - 1] = concatenate(Z, j, w)
+
+            Z[e - 1] = Z[-1] = 0
+
+        return num_from_list(Z, w)
 
     def real4_FPR2tm(self, a: int, b: int) -> int:
         '''
@@ -384,6 +474,91 @@ class Montgomery:
             Y >>= m
 
         return self.correction(Z)
+
+    def real6_FPR2tm_v2(self, a: int, b: int) -> int:
+        '''
+            Modified FPR2tm Version 2
+            refer: [2] Realization 6
+            NOTE: RS doesn't matter in this realization since no information will be lost in the decompose procedure
+            (from SW impl. aspect)
+        '''
+        X, Y, M, M_, m, d, RS = a, b, self.N, self.N_, self.m, self.d, REG_SIZE
+        r = 1 << m
+        mask = r - 1
+
+        ZM2, ZM1, ZR1 = 0, 0, 0
+
+        for i in range(d):
+            Yi = ith_word(Y, i, m)
+            qi = (((ZM2 >> m) + ZR1) & mask) * M_ & mask
+            Zi = (ZM2 >> m) + ZR1 + qi * M + (X * Yi << m)
+            ZMi, ZRi = decompose(Zi >> m, RS, m)
+
+            ZM2 = ZM1
+            ZM1 = ZMi
+            ZR1 = ZRi
+
+        Z = (ZM2 >> m) + ZM1 + ZR1
+        return Z
+
+    def real7_FPR2tm_v3(self, a: int, b: int) -> int:
+        '''
+            Modified FPR2tm Version 3
+            refer: [2] Realization 7
+        '''
+        X, Y, M, M_, m, d = a, b, self.N, self.N_, self.m, self.d
+        r = 1 << m
+        mask = r - 1
+        max_bits = self.R.bit_length() + 2 * m + 1  # HW impl. should split this in register size
+
+        # line 1:
+        ZSM2, ZSM1, ZSR1 = 0, 0, 0
+
+        # line 2:
+        ZCM2, ZCM1, ZCR1 = 0, 0, 0
+
+        # line 3:
+        c1 = 0
+
+        for i in range(d):
+            # line 5, 6
+            TSi, TCi = compress([ZSM2 >> m, ZCM2 >> m, ZSR1, ZCR1, c1], max_bits)
+            qSi, qCi = compress([(TSi & mask) * M_, (TCi & mask) * M_, 0], max_bits)
+
+            # line 7: HW should impl. this with compressor
+            qi = (qSi + qCi) & mask
+
+            # line 8:
+            Yi = ith_word(Y, i, m)
+            ZSi, ZCi = compress([TSi, TCi, qi * M, (X * Yi) << m], max_bits)
+
+            # line 9:
+            ci = 1 if (ZCi & mask) != 0 else 0
+
+            # line 10:
+            ZSMi, ZSRi = decompose(ZSi >> m, max_bits, m)
+
+            # line 11:
+            ZCMi, ZCRi = decompose(ZCi >> m, max_bits, m)
+
+            # update rolling array
+            ZSM2 = ZSM1
+            ZSM1 = ZSMi
+            ZSR1 = ZSRi
+
+            ZCM2 = ZCM1
+            ZCM1 = ZCMi
+            ZCR1 = ZCRi
+
+            c1 = ci
+
+        # line 13
+        Z = (ZSM2 >> m) + ZSM1 + ZSR1 + (ZCM2 >> m) + ZCM1 + ZCR1 + c1
+
+        return self.correction(Z)
+
+    def real8_MWR2tm(self, a: int, b: int) -> int:
+        pass
 
     def multiply(self, a: int, b: int) -> int:
         # This method delegates to the currently configured multiplication method

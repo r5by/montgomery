@@ -9,6 +9,81 @@ ith_word = lambda n, i, w: (n >> (i * w)) & ((1 << w) - 1)  # get the i-th word 
 create_2d = lambda m, n: [[] * n for _ in range(m)]  # create a m-by-n 2D array
 is_power_of_two = lambda n: n > 0 and (n & (n - 1)) == 0  # check if n is power of 2
 
+concatenate = lambda zlist, j, w: zlist[j] & 1 if w == 1 else ((zlist[j] & 1) << (w - 1)) + (
+        zlist[j - 1] & ((1 << (w - 1)) - 1))  #
+# concatenate the higher and lower value of Zj and Z{j-1}
+num_from_list = lambda zlist, w: sum(bit << (index * w) for index, bit in enumerate(zlist))
+
+
+def decompose(Z, w, m):
+    ''' Z = ZM(major part) + ZR(remainder part), where ZR is the least significant (w-m) bits'''
+    mask = (1 << w - m) - 1
+    ZR = Z & mask
+    ZM = Z & ~mask
+    return ZM, ZR
+
+
+def compress(numbers, bits):
+    '''
+        Ternary tree CSA of a given number list
+        NOTE!! bits must be greater than the sum of all numbers, o.w. will cause the loss of precision error
+    '''
+    # Process the list until we reduce it to two numbers
+    while len(numbers) > 2:
+        tmp = []
+        # Take every three elements and apply CSA
+        i = 0
+        while i < len(numbers) - 2:
+            # Perform CSA on every three elements
+            S, C = csa(numbers[i], numbers[i + 1], numbers[i + 2], bits)
+            tmp.append(S)
+            tmp.append(C)
+            i += 3
+        # If there are remaining numbers that couldn't form a complete group of three,
+        # just pass them to the next level.
+        if i < len(numbers):
+            tmp.extend(numbers[i:])
+        numbers = tmp
+
+    return csa(numbers[0], numbers[1], 0, bits)
+
+
+def csa(x, y, z, T):
+    '''
+        3-2 CSA(Carry-save-adders) for three T-bit integers x, y and z
+    :param x:
+    :param y:
+    :param z:
+    :param T:
+    :return:
+'''
+
+    # Initialize sum (S) and carry (C)
+    S = 0
+    C = 0
+
+    # Iterate through each bit position
+    for i in range(T):
+        # Extract the ith bit from x, y, z
+        xb = (x >> i) & 1
+        yb = (y >> i) & 1
+        zb = (z >> i) & 1
+
+        # Sum bit (X XOR Y XOR Z)
+        Sb = xb ^ yb ^ zb
+
+        # Carry bit ((X AND Y) OR (Y AND Z) OR (Z AND X))
+        Cb = (xb & yb) | (yb & zb) | (zb & xb)
+
+        # Set the ith bit in S and C
+        S |= (Sb << i)
+        C |= (Cb << i)
+
+    # C needs to be shifted left by one (to account for carry bit positions)
+    C <<= 1
+
+    return S, C
+
 
 def get_digits_decimal(u, n):
     res = []

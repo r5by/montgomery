@@ -11,7 +11,7 @@ class TestMontgomeryOperations(unittest.TestCase):
 
         if RADOMIZED:
             filename = 'm_primes.data'
-            domains = 7  # p for Z_p :
+            domains = 10  # p for Z_p :
             self.num_count = 100  # randomly generated repr. numbers in Z_p
         else:
             # fixed
@@ -21,29 +21,42 @@ class TestMontgomeryOperations(unittest.TestCase):
 
         if not os.path.exists(filename):
             # Generate prime numbers
-            large_primes = generate_large_primes(num_primes, 1024)
+            large_primes = generate_large_primes(num_primes, 256)
             save_to_file(large_primes)
         else:
             large_primes = load_primes_from_file(filename)
 
+        self.rands = random_list(low=2, high=max(large_primes), count=self.num_count)
         self.monts = [Montgomery.factory(mod=large_primes[i]).build() for i in range(domains)]
 
-        # real-1
-        self.monts[1].config('real1').build()
+        if RADOMIZED:
 
-        # real-2
-        # self.monts[2].config('real2').build(R=1 << nextp2(self.monts[2].N).bit_length() + 2)
-        self.monts[2].config('real2').build(n=nextp2(self.monts[2].N).bit_length() + 2)
+            # real-1
+            self.monts[1].config('real1').build()
 
-        # real-4
-        mont4 = Montgomery.factory(mod=large_primes[3], mul_opt='real4').build(m=4)
-        self.monts[4] = mont4
+            # real-2
+            # self.monts[2].config('real2').build(R=1 << nextp2(self.monts[2].N).bit_length() + 2)
+            self.monts[2].config('real2').build(n=nextp2(self.monts[2].N).bit_length() + 2)
 
-        # real-5
-        mont5 = Montgomery.factory(mod=large_primes[4], mul_opt='real5').build(m=8)
-        self.monts[5] = mont5
+            # real-4
+            mont4 = Montgomery.factory(mod=large_primes[4], mul_opt='real4').build(m=4)
+            self.monts[4] = mont4
 
-        self.rands = random_list(low=2, high=max(large_primes), count=self.num_count)
+            # real-5
+            mont5 = Montgomery.factory(mod=large_primes[5], mul_opt='real5').build(m=5)
+            self.monts[5] = mont5
+
+            # real-6
+            mont6 = Montgomery.factory(mod=large_primes[6], mul_opt='real6').build(m=6)
+            self.monts[6] = mont6
+
+            # real-7
+            mont7 = Montgomery.factory(mod=large_primes[7], mul_opt='real7').build(m=64)
+            self.monts[7] = mont7
+
+        else:
+            self.monts[0].config(mul_opt='real7').build(m=7)
+            # self.monts[0].config('real3').build(w=2)
 
     def test_domain(self):
 
@@ -51,6 +64,13 @@ class TestMontgomeryOperations(unittest.TestCase):
             # verify pre-calc
             R2_exp = (mont.R % mont.N) ** 2 % mont.N
             self.assertEqual(R2_exp, mont.R2)
+
+            # # M2 = Montgomery.factory(mod=31, mul_opt='real2').build(R=64)
+            # x = 22
+            # # y = M2(x)
+            # x_mont = mont(x)
+            # x_mont_exp = x * mont.R % mont.N
+            # self.assertEqual(x_mont.value, x_mont_exp)
 
             # verify enter/exit domain
             for x in self.rands:
@@ -82,6 +102,16 @@ class TestMontgomeryOperations(unittest.TestCase):
     #endregion
 
     def test_multiplication(self):
+        # mont = self.monts[0]
+        # a, b = 11, 29
+        # p = mont.N
+        #
+        # a, b = a % p, b % p
+        #
+        # act = mont(a) * mont(b)
+        # exp = mont((a * b) % p)
+        #
+        # assert act == exp
 
         for i in range(self.num_count - 1):
 
