@@ -3,10 +3,10 @@
 # In Montgomery Field over F_p, identity is mapped to R%p specifically; and mul operation be like: a_mul_b := REDC(
 # a*b), where REDC is the montgomery reduction.
 # references:
-# [1] ![Montgomery inversion](https://link.springer.com/article/10.1007/s13389-017-0161-x)
-# [2] ![High-Radix Design of a Scalable Montgomery Modular Multiplier With Low Latency](
+# [1] [Montgomery inversion](https://link.springer.com/article/10.1007/s13389-017-0161-x)
+# [2] [High-Radix Design of a Scalable Montgomery Modular Multiplier With Low Latency](
 # https://ieeexplore.ieee.org/abstract/document/9328560)
-# [3] ![Topics in Computational Number Theory Inspired by Peter L. Montgomery](https://www.cambridge.org/core/books/topics-in-computational-number-theory-inspired-by-peter-l-montgomery/4F7A9AE2CE219D490B7D253558CF6F00)
+# [3] [Topics in Computational Number Theory Inspired by Peter L. Montgomery](https://www.cambridge.org/core/books/topics-in-computational-number-theory-inspired-by-peter-l-montgomery/4F7A9AE2CE219D490B7D253558CF6F00)
 ## @author: Luke Li<zhongwei.li@mavs.uta.edu>
 from typing import Optional, Union
 from common import *
@@ -805,6 +805,25 @@ class MontgomeryNumber:
 
 # todo> remove: quick tb
 # if __name__ == '__main__':
+#
+#     # sample usage
+#     M = Montgomery.factory(mod=31, mul_opt='real5').build(m=5)
+#
+#     x_, y_ = 7, 21  # x', y' as elements in prime field F_{31}
+#
+#     # enter the Montgomery domain over F_{31}
+#     x, y = M(7), M(21)
+#     a = x + y
+#     b = x - y
+#     c = x * y
+#     d = 1 / x
+#     e = x / y
+#
+#     # exit the Montomery domain
+#     _x, _y = int(x), int(y)
+#     assert _x == x_
+#     assert _y == y_
+
 #     mont = Montgomery.factory(mod=257, mul_opt='real8').build(m=8, w=16)
 #
 #     x = 128
