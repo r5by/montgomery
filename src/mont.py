@@ -7,14 +7,10 @@
 # [2] ![High-Radix Design of a Scalable Montgomery Modular Multiplier With Low Latency](
 # https://ieeexplore.ieee.org/abstract/document/9328560)
 # [3] ![Topics in Computational Number Theory Inspired by Peter L. Montgomery](https://www.cambridge.org/core/books/topics-in-computational-number-theory-inspired-by-peter-l-montgomery/4F7A9AE2CE219D490B7D253558CF6F00)
-## @author: Luke Li
+## @author: Luke Li<zhongwei.li@mavs.uta.edu>
 from typing import Optional, Union
 from common import *
 import math
-
-
-# Constants
-REG_SIZE = 256  # the register size in bits
 
 
 class Montgomery:
@@ -38,6 +34,9 @@ class Montgomery:
         self.e: Optional[int] = None  # real-3 specific
         self.n_m: Optional[int] = None  # real-4 specific, R=r**n_m, where r=2**m is the radix
         self.d: Optional[int] = None  # real-5 specific
+
+        self.p: Optional[int] = None  # real-8 specific: PE count
+        self.k: Optional[int] = None  # real-8 specific
 
     @classmethod
     def factory(cls, mod: int, mul_opt: str = 'real1') -> 'Montgomery':
@@ -109,18 +108,8 @@ class Montgomery:
     def w(self, value):
         self._w = value
 
-    def build(self, **kwargs: Union[int, str]) -> 'Montgomery':
+    def parse_args(self, **kwargs: Union[int, str]):
 
-        # Default properties
-        self.n = self.N.bit_length()
-        self.R = 1 << self.n
-        self.m = self.n  # auto: r = 2**m
-
-        if self.mul_opt != 'real1' and not kwargs:
-            raise ValueError(f'For multiplication realizations other than the default, current: {self.mul_opt}, '
-                             f'requires more input arguments.')
-
-        # todo>
         for key, value in kwargs.items():
             if (self.mul_opt == 'real1'
                     or self.mul_opt == 'real2'):
@@ -137,10 +126,6 @@ class Montgomery:
                     self.n = value
                     self.R = 1 << value
 
-                # update radix for mont constant
-                self.m = self.n
-                self.r = self.R
-
             elif self.mul_opt == 'real3':
                 if 'w' not in kwargs:
                     raise ValueError(f'Word length (in bits) must be specified in realization 3.')
@@ -148,17 +133,7 @@ class Montgomery:
                 if key != 'w':
                     continue
 
-                if key == 'w':
-                    self.w = value
-
-                # update default values
-                self.n += 1
-                self.R = 1 << self.n  # update R to 2**{N+1}
-                self.e = math.ceil((self.n + 1) / self.w) + 1  # e = ceil((N+2)/w) + 1, where R=2**{N+1}
-
-                # update radix for mont constant
-                self.m = self.n
-                self.r = self.R
+                self.w = value
 
             elif self.mul_opt == 'real4':
                 if 'm' not in kwargs and 'r' not in kwargs:
@@ -167,25 +142,30 @@ class Montgomery:
                 if key != 'm' and key != 'r':
                     continue
 
-                # set-up radix r=2**m
+                # setup radix r=2**m
                 if key == "r":
                     self.r = value
                 elif key == "m":
                     self.m = value
-
-                # set-up R, we'll use the smallest R here as compared with a wider range of acceptable R's values in
-                # the original algorithm described in the paper
-                self.n_m = math.ceil(self.n / self.m)
-                self.R = self.r ** self.n_m
 
             elif (self.mul_opt == 'real5'
                   or self.mul_opt == 'real6'
                   or self.mul_opt == 'real7'):
                 if 'm' not in kwargs and 'r' not in kwargs:
-                    raise ValueError(f' Radix r=2**m must be specified for realization 4 ')
+                    raise ValueError(f' Radix r=2**m must be specified for realization: {self.mul_opt}')
 
-                if key != 'm' and key != 'r':
-                    continue
+                # setup radix r=2**m
+                if key == "r":
+                    self.r = value
+                elif key == "m":
+                    self.m = value
+
+            elif self.mul_opt == 'real8':
+                if 'm' not in kwargs and 'r' not in kwargs:
+                    raise ValueError(f' Radix r=2**m must be specified for realization: {self.mul_opt}')
+
+                if 'w' not in kwargs:
+                    raise ValueError(f'Word length (in bits) must be specified in realization 8.')
 
                 # set-up radix r=2**m
                 if key == "r":
@@ -193,9 +173,76 @@ class Montgomery:
                 elif key == "m":
                     self.m = value
 
-                # set-up R
-                self.d = math.ceil((self.n + self.m + 2) / self.m)
-                self.R = self.r ** (self.d - 1)  # R = r^{d-1}
+                # setup word length
+                if key == 'w':
+                    self.w = value
+
+                # setup PE count, use ideal value only
+                # if key == 'p':
+                #     self.p = value
+
+            else:
+                raise ValueError(f'Unsupported realization!')
+
+    def build(self, **kwargs: Union[int, str]) -> 'Montgomery':
+
+        # Default properties
+        self.n = self.N.bit_length()
+        self.R = 1 << self.n
+        self.m = self.n  # auto: r = 2**m
+
+        if self.mul_opt != 'real1' and not kwargs:
+            raise ValueError(f'For multiplication realizations other than the default, current: {self.mul_opt}, '
+                             f'requires more input arguments.')
+
+        self.parse_args(**kwargs)
+
+        if (self.mul_opt == 'real1'
+                or self.mul_opt == 'real2'):
+
+            # update radix for mont constant
+            self.m = self.n
+            self.r = self.R
+
+        elif self.mul_opt == 'real3':
+
+            # update default values
+            self.n += 1
+            self.R = 1 << self.n  # update R to 2**{N+1}
+            self.e = math.ceil((self.n + 1) / self.w) + 1  # e = ceil((N+2)/w) + 1, where R=2**{N+1}
+
+            # update radix for mont constant
+            self.m = self.n
+            self.r = self.R
+
+        elif self.mul_opt == 'real4':
+
+            # setup R, we'll use the smallest R here as compared with a wider range of acceptable R's values in
+            # the original algorithm described in the paper
+            self.n_m = math.ceil(self.n / self.m)
+            self.R = self.r ** self.n_m
+
+        elif (self.mul_opt == 'real5'
+              or self.mul_opt == 'real6'
+              or self.mul_opt == 'real7'):
+
+            # setup R
+            self.d = math.ceil((self.n + self.m + 2) / self.m)
+            self.R = self.r ** (self.d - 1)  # R = r^{d-1}
+
+        elif self.mul_opt == 'real8':
+
+            if self.w < self.m * 2:
+                raise ValueError(f'Condition: w (w={self.w}) >= 2m (m={self.m}) is violated!')
+
+            # setup R
+            self.e = math.ceil((self.n + 2 * self.m + 2) / self.w)
+            self.p = math.ceil((self.n + self.m + 2) / self.m)  # ref [2] section 3.2.1, ideal PE count
+            self.k = math.ceil((self.n + self.m + 2) / (self.m * self.p))
+            self.R = self.r ** (self.p * self.k - 1)  # R = r^{kp-1}
+
+        else:
+            raise ValueError(f'Unsupported realization!')
 
         self.__pre_calc()  # Final pre-calculation after all settings
         return self
@@ -506,10 +553,10 @@ class Montgomery:
             Modified FPR2tm Version 3
             refer: [2] Realization 7
         '''
-        X, Y, M, M_, m, d = a, b, self.N, self.N_, self.m, self.d
+        X, Y, M, M_, m, d, N = a, b, self.N, self.N_, self.m, self.d, self.n
         r = 1 << m
         mask = r - 1
-        max_bits = self.R.bit_length() + 2 * m + 1  # HW impl. should split this in register size
+        # max_bits = self.R.bit_length() + 2 * m + 1  # HW impl. should split this in register size
 
         # line 1:
         ZSM2, ZSM1, ZSR1 = 0, 0, 0
@@ -522,24 +569,24 @@ class Montgomery:
 
         for i in range(d):
             # line 5, 6
-            TSi, TCi = compress([ZSM2 >> m, ZCM2 >> m, ZSR1, ZCR1, c1], max_bits)
-            qSi, qCi = compress([(TSi & mask) * M_, (TCi & mask) * M_, 0], max_bits)
+            TSi, TCi = compress([ZSM2 >> m, ZCM2 >> m, ZSR1, ZCR1, c1])
+            qSi, qCi = compress([(TSi & mask) * M_, (TCi & mask) * M_, 0])
 
             # line 7: HW should impl. this with compressor
             qi = (qSi + qCi) & mask
 
             # line 8:
             Yi = ith_word(Y, i, m)
-            ZSi, ZCi = compress([TSi, TCi, qi * M, (X * Yi) << m], max_bits)
+            ZSi, ZCi = compress([TSi, TCi, qi * M, (X * Yi) << m])
 
             # line 9:
             ci = 1 if (ZCi & mask) != 0 else 0
 
             # line 10:
-            ZSMi, ZSRi = decompose(ZSi >> m, max_bits, m)
+            ZSMi, ZSRi = decompose(ZSi >> m, N, m)
 
             # line 11:
-            ZCMi, ZCRi = decompose(ZCi >> m, max_bits, m)
+            ZCMi, ZCRi = decompose(ZCi >> m, N, m)
 
             # update rolling array
             ZSM2 = ZSM1
@@ -558,7 +605,114 @@ class Montgomery:
         return self.correction(Z)
 
     def real8_MWR2tm(self, a: int, b: int) -> int:
-        pass
+        X, Y, M, M_, m, k, p, e, w = a, b, self.N, self.N_, self.m, self.k, self.p, self.e, self.w
+        r = 1 << m
+        rmask = r - 1
+        wmask = (1 << w) - 1
+
+        X_ = X << m  # X'=Xr
+        max_bits = self.R.bit_length() + m + 2
+
+        ZSM_, ZSM, ZSR = 0, 0, 0
+        ZCM_, ZCM, ZCR = 0, 0, 0
+        c, q = 0, 0
+
+        for i in range(k * p):  # outer loop
+
+            FBS = FBC = 0
+            Yi = ith_word(Y, i, m)
+
+            # print(f'Outer-loop:{i}\n')
+            # print('FBS:     ', hex(FBS))
+            # print('FBC:     ', hex(FBC))
+            # print('ZSM\':   ', hex(ZSM_))
+            # print('ZCM\':   ', hex(ZCM_))
+            # print('ZSM:     ', hex(ZSM))
+            # print('ZCM:     ', hex(ZCM))
+            # print('ZSR:     ', hex(ZSR))
+            # print('ZCR:     ', hex(ZCR))
+            # print('Yi:      ', hex(Yi))
+            # print('M\':     ', hex(M_))
+            # print('c:       ', hex(c))
+            # print("\n")
+
+            for j in range(e):  # inner loop
+
+                # line 6:
+                ZSRj, ZCRj = ith_word(ZSR, j, w - m), ith_word(ZCR, j, w - m)  # ZSR_j, ZCR_j
+                ZSM_j, ZCM_j = ith_word(ZSM_, j, w), ith_word(ZCM_, j, w)  # ZSM'_j, ZCM'_j
+                cj = c if j == 0 else 0
+                TS, TC = compress([ZSRj, ZCRj, ZSM_j >> m, ZCM_j >> m, cj], max_bits)
+
+                # line 7-10:
+                if j == 0:
+                    qS, qC = compress([(TS & rmask) * M_, (TC & rmask) * M_, 0], max_bits)
+                    q = (qS + qC) & rmask
+
+                # line 11:
+                X_j, Mj = ith_word(X_, j, w), ith_word(M, j, w)  # X'_j, M_j
+                OS, OC = compress([TS, TC, X_j * Yi, q * Mj, FBS, FBC], max_bits)
+
+                # line 12:
+                c = 1 if (j == 0 and (OC & rmask) != 0) else 0
+                # c = 1 if (j == 0 and not is_power_of_two(OC)) else 0
+
+                # line 13-16: we don't care updates if ZXX_{-1} do we?
+                if j > 0:
+                    ZSM_ = update_ith_word(ZSM_, j - 1, w, ith_word(ZSM, j - 1, w))  # ZSM'_{j-1}
+                    ZCM_ = update_ith_word(ZCM_, j - 1, w, ith_word(ZCM, j - 1, w))  # ZCM'_{j-1}
+                    ZSM = update_ith_word(ZSM, j - 1, w, (OS & rmask) << w - m)  # ZSM_{j-1}
+                    ZCM = update_ith_word(ZCM, j - 1, w, (OC & rmask) << w - m)  # ZCM_{j-1}
+                else:
+                    ZSM_
+
+                # line 17, 18:
+                ZSR = update_ith_word(ZSR, j, w - m, extract_bits(OS, m, w - 1))  # ZSR_{j}
+                ZCR = update_ith_word(ZCR, j, w - m, extract_bits(OC, m, w - 1))  # ZCR_{j}
+
+                # line 19, 20
+                FBS, FBC = extract_bits(OS, w, w + m + 1), extract_bits(OC, w, w + m + 1)
+
+            # line 22, 23
+            ZSM = update_ith_word(ZSM, e - 1, w, 0)
+            ZCM = update_ith_word(ZCM, e - 1, w, 0)
+
+            # print('Outter loop results: \n')
+            # print('ZSM\':   ', hex(ZSM_))
+            # print('ZCM\':   ', hex(ZCM_))
+            # print('ZSM:     ', hex(ZSM))
+            # print('ZCM:     ', hex(ZCM))
+            # print('ZSR:     ', hex(ZSR))
+            # print('ZCR:     ', hex(ZCR))
+            # print("\n")
+
+        # line 25, 26
+        DO1 = DO2 = 0
+        Carry = c
+
+        Z = 0
+        for i in range(e-1):
+            # line 28
+            ZSMi, ZCMi = ith_word(ZSM, i, w), ith_word(ZCM, i, w)
+            ZSRi, ZCRi = ith_word(ZSR, i, w - m), ith_word(ZCR, i, w - m)
+            ZSM_i, ZCM_i = ith_word(ZSM_, i, w), ith_word(ZCM_, i, w)
+            PS, PC = compress([ZSMi, ZCMi,
+                               ZSRi, ZCRi,
+                               ZSM_i >> m, ZCM_i >> m,
+                               DO1, DO2], max_bits)
+
+            # line 29
+            CarryZi = (PS & wmask) + (PC & wmask) + Carry
+            Carry = CarryZi >> w
+            Zi = CarryZi & wmask
+
+            # line 30
+            DO1, DO2 = (PS >> w) & 1, (PC >> w) & 1
+
+            # update Z
+            Z += Zi << (i * w)
+
+        return Z
 
     def multiply(self, a: int, b: int) -> int:
         # This method delegates to the currently configured multiplication method
@@ -647,3 +801,14 @@ class MontgomeryNumber:
     def __int__(self):
         # Convert Montgomery representation back to integer using R^{-1}, using int(a)
         return self.mont.exit_domain(self.value)
+
+
+# todo> remove: quick tb
+# if __name__ == '__main__':
+#     mont = Montgomery.factory(mod=257, mul_opt='real8').build(m=8, w=16)
+#
+#     x = 128
+#     x_mont = mont(x)
+#
+#     x_mont_exp = x * mont.R % mont.N
+#     assert x_mont.value == x_mont_exp

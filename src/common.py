@@ -1,5 +1,5 @@
 ## Common arithmetics
-## @author: Luke Li
+## @author: Luke Li<zhongwei.li@mavs.uta.edu>
 from utils import *
 
 # Convenient lambdas
@@ -8,11 +8,20 @@ ith_bit = lambda n, i: (n >> i) & 1  # get the i-th bit of nunmber n
 ith_word = lambda n, i, w: (n >> (i * w)) & ((1 << w) - 1)  # get the i-th word of number n
 create_2d = lambda m, n: [[] * n for _ in range(m)]  # create a m-by-n 2D array
 is_power_of_two = lambda n: n > 0 and (n & (n - 1)) == 0  # check if n is power of 2
+extract_bits = lambda n, i, j: (n >> i) & ((1 << (j - i + 1)) - 1)  # extract i-th to j-th bits of given number n (
+# inclusively) for i <= j
+update_ith_word = lambda n, i, w, v: (n & ~(((1 << w) - 1) << (i * w))) | (v << (i * w))  # Lambda function to update
+# the ith word of w bits in number n with value v
+
 
 concatenate = lambda zlist, j, w: zlist[j] & 1 if w == 1 else ((zlist[j] & 1) << (w - 1)) + (
         zlist[j - 1] & ((1 << (w - 1)) - 1))  #
 # concatenate the higher and lower value of Zj and Z{j-1}
 num_from_list = lambda zlist, w: sum(bit << (index * w) for index, bit in enumerate(zlist))
+
+
+# Constants
+REG_SIZE = 256  # the register size in bits
 
 
 def decompose(Z, w, m):
@@ -23,10 +32,26 @@ def decompose(Z, w, m):
     return ZM, ZR
 
 
-def compress(numbers, bits):
+def compress(numbers, _bits=None):
     '''
         Ternary tree CSA of a given number list
-        NOTE!! bits must be greater than the sum of all numbers, o.w. will cause the loss of precision error
+        NOTE!! _bits must be greater than the sum of all numbers, o.w. will cause the loss of precision error
+
+        TODO> Find out the correct way of compress (including, compress 2/3/>3 numbers) algorithms that works for real7 and real8
+        compress output different results based on input number's orders, for example:
+
+        a, b = compress([1, 2, 3, 4, 5, 6])  # result: a=21, b=0
+        a_, b_ = compress([4, 3, 1, 2, 6, 5])  # result: a=5, b=16
+
+        For this reason, the realization 7 & 8 in [2] are not specified clearly. line 9 in real-7 or line 12 in real-8
+        explicitly calculate 'c' based on intermediate result that is derived from compress of multiple variables.
+
+        Btw, recursively call:
+        a, b = compress([a, b, 0])
+        shall produce a final result in form of S(!=0), C(==0).
+
+        Thus, how to define compression alg. on 2 elements is also ambiguous. Therefore raise questions regarding
+        line 6 in real-7 or line 8 in real-8 for the compression of qS and qC.
     '''
     # Process the list until we reduce it to two numbers
     while len(numbers) > 2:
@@ -35,7 +60,8 @@ def compress(numbers, bits):
         i = 0
         while i < len(numbers) - 2:
             # Perform CSA on every three elements
-            S, C = csa(numbers[i], numbers[i + 1], numbers[i + 2], bits)
+            S, C = csa(numbers[i], numbers[i + 1], numbers[i + 2], _bits)
+            # S, C = csa(numbers[i], numbers[i + 1], numbers[i + 2])
             tmp.append(S)
             tmp.append(C)
             i += 3
@@ -45,16 +71,17 @@ def compress(numbers, bits):
             tmp.extend(numbers[i:])
         numbers = tmp
 
-    return csa(numbers[0], numbers[1], 0, bits)
+    return csa(numbers[0], numbers[1], 0)
 
 
-def csa(x, y, z, T):
+def csa(x, y, z, _T=REG_SIZE):
     '''
-        3-2 CSA(Carry-save-adders) for three T-bit integers x, y and z
+        3-2 CSA(Carry-save-adders) for three T-bit integers x, y and z;
+        Generally speaking, csa of three T-bit integers shall produce two (T+1)-bit integers S(sum) and C(carry)
     :param x:
     :param y:
     :param z:
-    :param T:
+    :param _T: Max bit length of x,y,z if given, o.w. calc. from x,y,z
     :return:
 '''
 
@@ -62,6 +89,7 @@ def csa(x, y, z, T):
     S = 0
     C = 0
 
+    T = int(_T) if _T else max(x.bit_length(), y.bit_length(), z.bit_length())
     # Iterate through each bit position
     for i in range(T):
         # Extract the ith bit from x, y, z
