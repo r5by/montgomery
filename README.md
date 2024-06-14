@@ -60,6 +60,8 @@ Realization 3, 7 and 8 in reference [2] are currently unavailable.
 
 ## References
 \[1\] [Montgomery inversion](https://link.springer.com/article/10.1007/s13389-017-0161-x)
+
 \[2\] [High-Radix Design of a Scalable Montgomery Modular Multiplier With Low Latency]( https://ieeexplore.ieee.org/abstract/document/9328560)
+
 \[3\] [Topics in Computational Number Theory Inspired by Peter L. Montgomery](https://www.cambridge.org/core/books/topics-in-computational-number-theory-inspired-by-peter-l-montgomery/4F7A9AE2CE219D490B7D253558CF6F00)
 
