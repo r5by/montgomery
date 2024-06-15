@@ -69,7 +69,8 @@ def compress(numbers, _bits=None):
             tmp.extend(numbers[i:])
         numbers = tmp
 
-    return csa(numbers[0], numbers[1], 0)
+    # return csa(numbers[0], numbers[1], 0)
+    return numbers[0], numbers[1]
 
 
 def csa(x, y, z, _T=REG_SIZE):

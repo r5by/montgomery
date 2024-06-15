@@ -33,39 +33,39 @@ class TestMontgomeryOperations(unittest.TestCase):
 
         if RADOMIZED:
 
-            # real-1
-            self.monts[1].config('real1').build()
-
-            # real-2
-            # self.monts[2].config('real2').build(R=1 << nextp2(self.monts[2].N).bit_length() + 2)
-            self.monts[2].config('real2').build(n=nextp2(self.monts[2].N).bit_length() + 2)
-
-            # real-3
-            mont3 = Montgomery.factory(mod=large_primes[3], mul_opt='real3').build(w=8)
+            # # real-1
+            # self.monts[1].config('real1').build()
+            #
+            # # real-2
+            # # self.monts[2].config('real2').build(R=1 << nextp2(self.monts[2].N).bit_length() + 2)
+            # self.monts[2].config('real2').build(n=nextp2(self.monts[2].N).bit_length() + 2)
+            #
+            # # real-3
+            mont3 = Montgomery.factory(mod=large_primes[3], mul_opt='real3').build(w=5)
             self.monts[3] = mont3
-
-            # real-4
-            mont4 = Montgomery.factory(mod=large_primes[4], mul_opt='real4').build(m=4)
-            self.monts[4] = mont4
-
-            # real-5
-            mont5 = Montgomery.factory(mod=large_primes[5], mul_opt='real5').build(m=5)
-            self.monts[5] = mont5
-
-            # real-6
-            mont6 = Montgomery.factory(mod=large_primes[6], mul_opt='real6').build(m=6)
-            self.monts[6] = mont6
-
-            # todo> real-7
-            # mont7 = Montgomery.factory(mod=large_primes[7], mul_opt='real7').build(m=64)
-            # self.monts[0] = mont7
+            #
+            # # real-4
+            # mont4 = Montgomery.factory(mod=large_primes[4], mul_opt='real4').build(m=4)
+            # self.monts[4] = mont4
+            #
+            # # real-5
+            # mont5 = Montgomery.factory(mod=large_primes[5], mul_opt='real5').build(m=5)
+            # self.monts[5] = mont5
+            #
+            # # real-6
+            # mont6 = Montgomery.factory(mod=large_primes[6], mul_opt='real6').build(m=6)
+            # self.monts[6] = mont6
+            #
+            # # todo> real-7
+            # mont7 = Montgomery.factory(mod=large_primes[7], mul_opt='real7').build(m=4, w=8)
+            # self.monts[7] = mont7
 
             # todo> real-8
-            # mont8 = Montgomery.factory(mod=large_primes[8], mul_opt='real8').build(m=64, w=128)
+            # mont8 = Montgomery.factory(mod=large_primes[8], mul_opt='real8').build(m=2, w=8)
             # self.monts[8] = mont8
 
         else:
-            self.monts[0].config(mul_opt='real7').build(m=64)
+            self.monts[0].config(mul_opt='real8').build(m=2, w=8)
             # self.monts[0].config(mul_opt='real8').build(m=8, w=16)
             # self.monts[0].config('real3').build(w=2)
 
@@ -78,12 +78,13 @@ class TestMontgomeryOperations(unittest.TestCase):
 
             # verify enter/exit domain
             for x in self.rands:
+            # for x in range(mont.N):
                 x_mont = mont(x)
                 x_mont_exp = x * mont.R % mont.N
-                self.assertEqual(x_mont.value, x_mont_exp, f'Montgomery repr of x={x} failed!')
+                self.assertEqual(x_mont_exp, x_mont.value, f'Montgomery repr of x={x} failed!')
 
                 x_ = int(x_mont)
-                self.assertEqual(x_, x % mont.N)
+                self.assertEqual(x % mont.N, x_)
 
     #region Toggle on only for small montgomery domains
     # def test_mont_constant(self):

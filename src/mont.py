@@ -160,6 +160,9 @@ class Montgomery:
                 elif key == "m":
                     self.m = value
 
+                if key == "w":
+                    self.w = value
+
             elif self.mul_opt == 'real8':
                 if 'm' not in kwargs and 'r' not in kwargs:
                     raise ValueError(f' Radix r=2**m must be specified for realization: {self.mul_opt}')
@@ -220,18 +223,30 @@ class Montgomery:
             self.n_m = math.ceil(self.n / self.m)
             self.R = self.r ** self.n_m
 
-        elif (self.mul_opt == 'real5'
-              or self.mul_opt == 'real6'
+        elif self.mul_opt == 'real5':
+
+            # setup R
+            self.d = math.ceil((self.n + self.m + 2) / self.m)
+            self.R = self.r ** (self.d - 1)  # R = r^{d-1}
+
+        elif (self.mul_opt == 'real6'
               or self.mul_opt == 'real7'):
 
             # setup R
             self.d = math.ceil((self.n + self.m + 2) / self.m)
             self.R = self.r ** (self.d - 1)  # R = r^{d-1}
 
+            if self.w and self.w < self.m * 2:
+                raise ValueError(f'Condition: w (w={self.w}) >= 2m (m={self.m}) is violated for {self.mul_opt}!')
+
+            # w is used for decomposition, default to 2*m
+            if self.w is None:
+                self.w = 2 * self.m
+
         elif self.mul_opt == 'real8':
 
             if self.w < self.m * 2:
-                raise ValueError(f'Condition: w (w={self.w}) >= 2m (m={self.m}) is violated!')
+                raise ValueError(f'Condition: w (w={self.w}) >= 2m (m={self.m}) is violated for real-8')
 
             # setup R
             self.e = math.ceil((self.n + 2 * self.m + 2) / self.w)
@@ -514,6 +529,7 @@ class Montgomery:
         for i in range(d):
             Yi = Y & mask
             q = (Z & mask) * M_ & mask
+
             Zi = (Z + q * M + (X * Yi << m)) >> m
             Z = Zi
 
@@ -525,21 +541,28 @@ class Montgomery:
         '''
             Modified FPR2tm Version 2
             refer: [2] Realization 6
-            NOTE: RS doesn't matter in this realization since no information will be lost in the decompose procedure
-            (from SW impl. aspect)
         '''
-        X, Y, M, M_, m, d, RS = a, b, self.N, self.N_, self.m, self.d, REG_SIZE
+        X, Y, M, M_, m, d, w = a, b, self.N, self.N_, self.m, self.d, self.w
         r = 1 << m
-        mask = r - 1
+        rmask = r - 1
 
         ZM2, ZM1, ZR1 = 0, 0, 0
 
         for i in range(d):
+            # print(f'====================')
+            # print(f'     i: {i}')
+            # print(f'====================')
             Yi = ith_word(Y, i, m)
-            qi = (((ZM2 >> m) + ZR1) & mask) * M_ & mask
-            Zi = (ZM2 >> m) + ZR1 + qi * M + (X * Yi << m)
-            ZMi, ZRi = decompose(Zi >> m, RS, m)
+            qi = (((ZM2 >> m) + ZR1) & rmask) * M_ & rmask  # qi is exactly the same q at iteration i for real-5
+            # print(f'T={(ZM2 >> m) + ZR1}')
+            # print(f'qi={qi}')
 
+            Zi = (ZM2 >> m) + ZR1 + qi * M + (X * Yi << m)  # T = (ZM2 >> m) + ZR1
+            # print(f'Zi={Zi} = T({(ZM2 >> m) + ZR1 }) + qi*M({qi * M}) + XYir({X * Yi << m})')
+
+            ZMi, ZRi = decompose(Zi >> m, w, m)  # Zi = ZMi + ZRi is exactly the same Zi in real-5 at iteration i
+            # print(f'i={i}, Zi_decomposed={ZMi + ZRi}')
+            # print(f'i={i}, Zi_m={ZMi}, Zi_r={ZRi}')
             ZM2 = ZM1
             ZM1 = ZMi
             ZR1 = ZRi
@@ -552,10 +575,9 @@ class Montgomery:
             Modified FPR2tm Version 3
             refer: [2] Realization 7
         '''
-        X, Y, M, M_, m, d, N = a, b, self.N, self.N_, self.m, self.d, self.n
+        X, Y, M, M_, m, d, N, w = a, b, self.N, self.N_, self.m, self.d, self.n, self.w
         r = 1 << m
-        mask = r - 1
-        # max_bits = self.R.bit_length() + 2 * m + 1  # HW impl. should split this in register size
+        rmask = r - 1
 
         # line 1:
         ZSM2, ZSM1, ZSR1 = 0, 0, 0
@@ -569,23 +591,26 @@ class Montgomery:
         for i in range(d):
             # line 5, 6
             TSi, TCi = compress([ZSM2 >> m, ZCM2 >> m, ZSR1, ZCR1, c1])
-            qSi, qCi = compress([(TSi & mask) * M_, (TCi & mask) * M_, 0])
+            qSi, qCi = compress([(TSi & rmask) * M_, (TCi & rmask) * M_])
 
             # line 7: HW should impl. this with compressor
-            qi = (qSi + qCi) & mask
+            qi = (qSi + qCi) & rmask
+            # print(f'i={i}, qi={qi}')
 
             # line 8:
             Yi = ith_word(Y, i, m)
             ZSi, ZCi = compress([TSi, TCi, qi * M, (X * Yi) << m])
+            # print(f'Zi={ZSi + ZCi} = ZSi({ZSi}) + ZCi({ZCi})')
 
             # line 9:
-            ci = 1 if (ZCi & mask) != 0 else 0
+            ci = 1 if (ZCi & rmask) != 0 else 0  # [2] formula (23)
+            # print(f'ZSi%r={(ZSi & rmask)}, ZCi%r={(ZCi & rmask)}, ci={ci}')
 
             # line 10:
-            ZSMi, ZSRi = decompose(ZSi >> m, N, m)
+            ZSMi, ZSRi = decompose(ZSi >> m, w, m)
 
             # line 11:
-            ZCMi, ZCRi = decompose(ZCi >> m, N, m)
+            ZCMi, ZCRi = decompose(ZCi >> m, w, m)
 
             # update rolling array
             ZSM2 = ZSM1
@@ -610,11 +635,11 @@ class Montgomery:
         wmask = (1 << w) - 1
 
         X_ = X << m  # X'=Xr
-        max_bits = self.R.bit_length() + m + 2
 
-        ZSM_, ZSM, ZSR = 0, 0, 0
-        ZCM_, ZCM, ZCR = 0, 0, 0
-        c, q = 0, 0
+        # same technique as in real-3
+        _ZSM_, _ZSM, _ZSR = 0, 0, 0
+        _ZCM_, _ZCM, _ZCR = 0, 0, 0
+        c = 0
 
         for i in range(k * p):  # outer loop
 
@@ -635,46 +660,48 @@ class Montgomery:
             # print('c:       ', hex(c))
             # print("\n")
 
+            q = 0
             for j in range(e):  # inner loop
 
                 # line 6:
-                ZSRj, ZCRj = ith_word(ZSR, j, w - m), ith_word(ZCR, j, w - m)  # ZSR_j, ZCR_j
-                ZSM_j, ZCM_j = ith_word(ZSM_, j, w), ith_word(ZCM_, j, w)  # ZSM'_j, ZCM'_j
-                cj = c if j == 0 else 0
-                TS, TC = compress([ZSRj, ZCRj, ZSM_j >> m, ZCM_j >> m, cj], max_bits)
+                ZSRj, ZCRj = ith_word(_ZSR, j + 1, w - m), ith_word(_ZCR, j + 1, w - m)  # ZSR_j, ZCR_j
+                ZSM_j, ZCM_j = ith_word(_ZSM_, j + 1, w), ith_word(_ZCM_, j + 1, w)  # ZSM'_j, ZCM'_j
+                TS, TC = compress([ZSRj, ZCRj, ZSM_j >> m, ZCM_j >> m, c if j == 0 else 0])
 
                 # line 7-10:
                 if j == 0:
-                    qS, qC = compress([(TS & rmask) * M_, (TC & rmask) * M_, 0], max_bits)
+                    qS, qC = compress([(TS & rmask) * M_, (TC & rmask) * M_])
                     q = (qS + qC) & rmask
+                # print(f'i={i}, q={q}') # checked
 
                 # line 11:
                 X_j, Mj = ith_word(X_, j, w), ith_word(M, j, w)  # X'_j, M_j
-                OS, OC = compress([TS, TC, X_j * Yi, q * Mj, FBS, FBC], max_bits)
+                OS, OC = compress([TS, TC, X_j * Yi, q * Mj, FBS, FBC])
 
                 # line 12:
-                c = 1 if (j == 0 and (OC & rmask) != 0) else 0
-                # c = 1 if (j == 0 and not is_power_of_two(OC)) else 0
+                # c = 1 if (j == 0 and (OC & rmask) != 0) else 0
+                c = 1 if (j == 0 and (OS + OC & rmask) != 0) else 0
 
-                # line 13-16: we don't care updates if ZXX_{-1} do we?
-                if j > 0:
-                    ZSM_ = update_ith_word(ZSM_, j - 1, w, ith_word(ZSM, j - 1, w))  # ZSM'_{j-1}
-                    ZCM_ = update_ith_word(ZCM_, j - 1, w, ith_word(ZCM, j - 1, w))  # ZCM'_{j-1}
-                    ZSM = update_ith_word(ZSM, j - 1, w, (OS & rmask) << w - m)  # ZSM_{j-1}
-                    ZCM = update_ith_word(ZCM, j - 1, w, (OC & rmask) << w - m)  # ZCM_{j-1}
-                else:
-                    ZSM_
+                # line 13-16:
+                _ZSM_ = update_ith_word(_ZSM_, j - 1 + 1, w, ith_word(_ZSM, j - 1 + 1, w))  # ZSM'_{j-1}
+                _ZCM_ = update_ith_word(_ZCM_, j - 1 + 1, w, ith_word(_ZCM, j - 1 + 1, w))  # ZCM'_{j-1}
+                _ZSM = update_ith_word(_ZSM, j - 1 + 1, w, (OS & rmask) << w - m)  # ZSM_{j-1}
+                _ZCM = update_ith_word(_ZCM, j - 1 + 1, w, (OC & rmask) << w - m)  # ZCM_{j-1}
 
                 # line 17, 18:
-                ZSR = update_ith_word(ZSR, j, w - m, extract_bits(OS, m, w - 1))  # ZSR_{j}
-                ZCR = update_ith_word(ZCR, j, w - m, extract_bits(OC, m, w - 1))  # ZCR_{j}
+                _ZSR = update_ith_word(_ZSR, j + 1, w - m, extract_bits(OS, m, w - 1))  # ZSR_{j}
+                _ZCR = update_ith_word(_ZCR, j + 1, w - m, extract_bits(OC, m, w - 1))  # ZCR_{j}
 
-                # line 19, 20
+                # line 19, 20:
                 FBS, FBC = extract_bits(OS, w, w + m + 1), extract_bits(OC, w, w + m + 1)
 
-            # line 22, 23
-            ZSM = update_ith_word(ZSM, e - 1, w, 0)
-            ZCM = update_ith_word(ZCM, e - 1, w, 0)
+            # line 22:
+            _ZSM = update_ith_word(_ZSM, e - 1 + 1, w, 0)
+            _ZSM = update_ith_word(_ZSM, -1 + 1, w, 0)
+
+            # line 23:
+            _ZCM = update_ith_word(_ZCM, e - 1 + 1, w, 0)
+            _ZCM = update_ith_word(_ZCM, -1 + 1, w, 0)
 
             # print('Outter loop results: \n')
             # print('ZSM\':   ', hex(ZSM_))
@@ -690,6 +717,9 @@ class Montgomery:
         Carry = c
 
         Z = 0
+        ZSM, ZCM = _ZSM >> w, _ZCM >> w  # checkout ZSM, ZCM
+        ZSM_, ZCM_ = _ZSM_ >> w, _ZCM_ >> w  # checkout ZSM', ZCM'
+        ZSR, ZCR = _ZSR >> w - m, _ZCR >> w - m  # checkout ZSR, ZCR
         for i in range(e - 1):
             # line 28
             ZSMi, ZCMi = ith_word(ZSM, i, w), ith_word(ZCM, i, w)
@@ -698,7 +728,7 @@ class Montgomery:
             PS, PC = compress([ZSMi, ZCMi,
                                ZSRi, ZCRi,
                                ZSM_i >> m, ZCM_i >> m,
-                               DO1, DO2], max_bits)
+                               DO1, DO2])
 
             # line 29
             CarryZi = (PS & wmask) + (PC & wmask) + Carry
@@ -804,16 +834,20 @@ class MontgomeryNumber:
 
 # todo> remove: quick tb
 if __name__ == '__main__':
-    pass
+    # pass
     # region sample usage
     # M = Montgomery.factory(mod=31, mul_opt='real5').build(m=4)
-    # p = 31
+    p = 61
     # M = Montgomery.factory(mod=p, mul_opt='real3').build(w=8)
-    # x = 7
-    #
-    # _x = M(x)
-    #
-    # print('done')
+
+    M = Montgomery.factory(mod=p, mul_opt='real8').build(m=2, w=8)
+    # M = Montgomery.factory(mod=p, mul_opt='real7').build(m=3, w=8)
+    # M = Montgomery.factory(mod=p, mul_opt='real6').build(m=3, w=8)
+    x = 46
+
+    _x = M(x)
+
+    print('done')
 
     # x_, y_ = 7, 21  # x', y' as elements in prime field F_{31}
     #
