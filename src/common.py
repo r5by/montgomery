@@ -5,18 +5,16 @@ from utils import *
 # Convenient lambdas
 nextp2 = lambda x: 1 << (x - 1).bit_length()  # next power of 2 greater than x
 ith_bit = lambda n, i: (n >> i) & 1  # get the i-th bit of nunmber n
-ith_word = lambda n, i, w: (n >> (i * w)) & ((1 << w) - 1)  # get the i-th word of number n
+ith_word = lambda n, i, w: 0 if i < 0 else (n >> (i * w)) & ((1 << w) - 1)  # get the i-th word of number n,
+# if i < 0 returns 0
 create_2d = lambda m, n: [[] * n for _ in range(m)]  # create a m-by-n 2D array
 is_power_of_two = lambda n: n > 0 and (n & (n - 1)) == 0  # check if n is power of 2
 extract_bits = lambda n, i, j: (n >> i) & ((1 << (j - i + 1)) - 1)  # extract i-th to j-th bits of given number n (
 # inclusively) for i <= j
-update_ith_word = lambda n, i, w, v: (n & ~(((1 << w) - 1) << (i * w))) | (v << (i * w))  # Lambda function to update
-# the ith word of w bits in number n with value v
+update_ith_word = lambda n, i, w, v: (n & ~(((1 << w) - 1) << (i * w))) | (v << (i * w))  # Lambda function to
+# update the ith word of w bits in number n with value v
 
-
-concatenate = lambda zlist, j, w: zlist[j] & 1 if w == 1 else ((zlist[j] & 1) << (w - 1)) + (
-        zlist[j - 1] & ((1 << (w - 1)) - 1))  #
-# concatenate the higher and lower value of Zj and Z{j-1}
+concatenate = lambda a, b, w: a << w | b
 num_from_list = lambda zlist, w: sum(bit << (index * w) for index, bit in enumerate(zlist))
 
 

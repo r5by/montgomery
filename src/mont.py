@@ -207,13 +207,11 @@ class Montgomery:
         elif self.mul_opt == 'real3':
 
             # update default values
-            self.n += 1
-            self.R = 1 << self.n  # update R to 2**{N+1}
-            self.e = math.ceil((self.n + 1) / self.w) + 1  # e = ceil((N+2)/w) + 1, where R=2**{N+1}
+            self.R = 1 << self.n + 1  # update R to 2**{N+1}
+            self.e = math.ceil((self.n + 2) / self.w) + 1  # e = ceil((N+2)/w) + 1, where R=2**{N+1}
 
             # update radix for mont constant
-            self.m = self.n
-            self.r = self.R
+            self.m = 1  # auto: r == 2
 
         elif self.mul_opt == 'real4':
 
@@ -430,7 +428,6 @@ class Montgomery:
         '''
         X, Y, M, N = a, b, self.N, self.n - 1
 
-        # zlist = []
         Z = 0
         for i in range(N + 1):  # b.c. self.n = N+1 where R=2**(N+1) for N defined in the paper
             Zi = Z + X * ith_bit(Y, i)
@@ -438,47 +435,49 @@ class Montgomery:
             q = Zi & 1  # reason for q = Zi*M_%b, here since b=2, M_=1, b.c. ext(x, 2)=xx, 1 always holds.
             Zi = (Zi + q * M) >> 1
             Z = Zi
-            # zlist.append(Zi)
 
         return Z
 
     def real3_MWR2t1(self, a: int, b: int) -> int:
-        # todo> fix this impl.
+        '''
+            Scalable Montgomery Modular Multiplication With (Multiplier) Radix 2 (MWR2t1)
+            refer: [2] Realization 3
+        '''
 
-        X, Y, M, N, w, e = a, b, self.N, self.n - 1, self.w, self.e
+        X, Y, M, N, w, e = a, b, self.N, self.n, self.w, self.e
+        wmask = (1 << w) - 1
 
-        Z = [0 * w for _ in range(e + 1)]  # save Z[-1] as well
-        mask = (1 << w) - 1
-
+        _Z = 0  # _Z is cat(Z[e-1:0], Z_{-1}), thus (e+1) * w bits; therefore, Z_{j} = _Z_{j+1}
         for i in range(N + 1):
-            Ca = Cb = 0
+            Ca, Cb = 0, 0
             Yi = ith_bit(Y, i)
 
-            q = 0  # dummy q init for the inner loops
+            q = 0  # q (calc. from Z_0) stays alive entire life-time of inner-loop (value persist for per-ith loop)
             for j in range(e):
-                Xj = ith_word(X, j, w)
+                Xj, Zj = ith_word(X, j, w), ith_word(_Z, j + 1, w)
+                # line 5:
+                cazj = Zj + Xj * Yi + Ca
+                Ca, Zj = cazj >> w, cazj & wmask
+                _Z = update_ith_word(_Z, j + 1, w, Zj)  # don't forget this update of Z's value
 
-                # line(5)
-                CaZj = Z[j] + Xj * Yi + Ca
-                Ca = CaZj >> w
-                Z[j] = CaZj & mask
-
-                # lines(6,7)
+                # line 6-8:
                 if j == 0:
-                    q = Z[0] & 1
+                    q = ith_word(_Z, 0 + 1, w) & 1
 
-                # line(9)
+                # line 9:
                 Mj = ith_word(M, j, w)
-                CbZj = Z[j] + q * Mj + Cb
-                Cb = CbZj >> w
-                Z[j] = CbZj & mask
+                tmp = Zj + q * Mj + Cb
+                Cb, Zj = tmp >> w, tmp & wmask
+                _Z = update_ith_word(_Z, j + 1, w, Zj)  # don't forget this update of Z's value
 
-                # line(10)
-                Z[j - 1] = concatenate(Z, j, w)
+                # line 10:
+                v = concatenate(Zj & 1, ith_word(_Z, (j - 1) + 1, w) >> 1, w - 1)
+                _Z = update_ith_word(_Z, (j - 1) + 1, w, v)
 
-            Z[e - 1] = Z[-1] = 0
+            _Z = update_ith_word(_Z, (e - 1) + 1, w, 0)
+            _Z = update_ith_word(_Z, (-1) + 1, w, 0)
 
-        return num_from_list(Z, w)
+        return _Z >> w
 
     def real4_FPR2tm(self, a: int, b: int) -> int:
         '''
@@ -691,7 +690,7 @@ class Montgomery:
         Carry = c
 
         Z = 0
-        for i in range(e-1):
+        for i in range(e - 1):
             # line 28
             ZSMi, ZCMi = ith_word(ZSM, i, w), ith_word(ZCM, i, w)
             ZSRi, ZCRi = ith_word(ZSR, i, w - m), ith_word(ZCR, i, w - m)
@@ -804,25 +803,33 @@ class MontgomeryNumber:
 
 
 # todo> remove: quick tb
-# if __name__ == '__main__':
-#
-#     # sample usage
-#     M = Montgomery.factory(mod=31, mul_opt='real5').build(m=5)
-#
-#     x_, y_ = 7, 21  # x', y' as elements in prime field F_{31}
-#
-#     # enter the Montgomery domain over F_{31}
-#     x, y = M(7), M(21)
-#     a = x + y
-#     b = x - y
-#     c = x * y
-#     d = 1 / x
-#     e = x / y
-#
-#     # exit the Montomery domain
-#     _x, _y = int(x), int(y)
-#     assert _x == x_
-#     assert _y == y_
+if __name__ == '__main__':
+    pass
+    # region sample usage
+    # M = Montgomery.factory(mod=31, mul_opt='real5').build(m=4)
+    # p = 31
+    # M = Montgomery.factory(mod=p, mul_opt='real3').build(w=8)
+    # x = 7
+    #
+    # _x = M(x)
+    #
+    # print('done')
+
+    # x_, y_ = 7, 21  # x', y' as elements in prime field F_{31}
+    #
+    # # enter the Montgomery domain over F_{31}
+    # x, y = M(7), M(21)
+    # a = x + y
+    # b = x - y
+    # c = x * y
+    # d = 1 / x
+    # e = x / y
+    #
+    # # exit the Montomery domain
+    # _x, _y = int(x), int(y)
+    # assert _x == x_
+    # assert _y == y_
+    #endregion
 
 #     mont = Montgomery.factory(mod=257, mul_opt='real8').build(m=8, w=16)
 #
