@@ -462,18 +462,18 @@ class Montgomery:
         X, Y, M, N, w, e = a, b, self.N, self.n, self.w, self.e
         wmask = (1 << w) - 1
 
-        _Z = 0  # _Z is cat(Z[e-1:0], Z_{-1}), thus (e+1) * w bits; therefore, Z_{j} = _Z_{j+1}
+        _Z = 0
         for i in range(N + 1):
             Ca, Cb = 0, 0
             Yi = ith_bit(Y, i)
 
-            q = 0  # q (calc. from Z_0) stays alive entire life-time of inner-loop (value persist for per-ith loop)
+            q = 0
             for j in range(e):
                 Xj, Zj = ith_word(X, j, w), ith_word(_Z, j + 1, w)
                 # line 5:
                 cazj = Zj + Xj * Yi + Ca
                 Ca, Zj = cazj >> w, cazj & wmask
-                _Z = update_ith_word(_Z, j + 1, w, Zj)  # don't forget this update of Z's value
+                _Z = update_ith_word(_Z, j + 1, w, Zj)
 
                 # line 6-8:
                 if j == 0:
@@ -483,7 +483,7 @@ class Montgomery:
                 Mj = ith_word(M, j, w)
                 tmp = Zj + q * Mj + Cb
                 Cb, Zj = tmp >> w, tmp & wmask
-                _Z = update_ith_word(_Z, j + 1, w, Zj)  # don't forget this update of Z's value
+                _Z = update_ith_word(_Z, j + 1, w, Zj)
 
                 # line 10:
                 v = concatenate(Zj & 1, ith_word(_Z, (j - 1) + 1, w) >> 1, w - 1)
@@ -503,15 +503,15 @@ class Montgomery:
 
         Z = 0
         r = 1 << m
-        mask = r - 1  # %r eqs. &mask
+        mask = r - 1
         for i in range(n_m):
-            Yi = Y & mask  # take Y's ith word
+            Yi = Y & mask
             Zi = Z + X * Yi
             q = (Zi & mask) * M_ & mask
-            Zi = (Zi + q * M) >> m  # divides r=2^m
+            Zi = (Zi + q * M) >> m
             Z = Zi
 
-            Y >>= m  # prepare Y for next word
+            Y >>= m
 
         return self.correction(Z)
 
@@ -549,20 +549,12 @@ class Montgomery:
         ZM2, ZM1, ZR1 = 0, 0, 0
 
         for i in range(d):
-            # print(f'====================')
-            # print(f'     i: {i}')
-            # print(f'====================')
             Yi = ith_word(Y, i, m)
-            qi = (((ZM2 >> m) + ZR1) & rmask) * M_ & rmask  # qi is exactly the same q at iteration i for real-5
-            # print(f'T={(ZM2 >> m) + ZR1}')
-            # print(f'qi={qi}')
+            qi = (((ZM2 >> m) + ZR1) & rmask) * M_ & rmask
 
-            Zi = (ZM2 >> m) + ZR1 + qi * M + (X * Yi << m)  # T = (ZM2 >> m) + ZR1
-            # print(f'Zi={Zi} = T({(ZM2 >> m) + ZR1 }) + qi*M({qi * M}) + XYir({X * Yi << m})')
+            Zi = (ZM2 >> m) + ZR1 + qi * M + (X * Yi << m)
 
-            ZMi, ZRi = decompose(Zi >> m, w, m)  # Zi = ZMi + ZRi is exactly the same Zi in real-5 at iteration i
-            # print(f'i={i}, Zi_decomposed={ZMi + ZRi}')
-            # print(f'i={i}, Zi_m={ZMi}, Zi_r={ZRi}')
+            ZMi, ZRi = decompose(Zi >> m, w, m)
             ZM2 = ZM1
             ZM1 = ZMi
             ZR1 = ZRi
@@ -593,18 +585,14 @@ class Montgomery:
             TSi, TCi = compress([ZSM2 >> m, ZCM2 >> m, ZSR1, ZCR1, c1])
             qSi, qCi = compress([(TSi & rmask) * M_, (TCi & rmask) * M_])
 
-            # line 7: HW should impl. this with compressor
             qi = (qSi + qCi) & rmask
-            # print(f'i={i}, qi={qi}')
 
             # line 8:
             Yi = ith_word(Y, i, m)
             ZSi, ZCi = compress([TSi, TCi, qi * M, (X * Yi) << m])
-            # print(f'Zi={ZSi + ZCi} = ZSi({ZSi}) + ZCi({ZCi})')
 
             # line 9:
-            ci = 1 if (ZCi & rmask) != 0 else 0  # [2] formula (23)
-            # print(f'ZSi%r={(ZSi & rmask)}, ZCi%r={(ZCi & rmask)}, ci={ci}')
+            ci = 1 if (ZCi & rmask) != 0 else 0
 
             # line 10:
             ZSMi, ZSRi = decompose(ZSi >> m, w, m)
@@ -636,7 +624,6 @@ class Montgomery:
 
         X_ = X << m  # X'=Xr
 
-        # same technique as in real-3
         _ZSM_, _ZSM, _ZSR = 0, 0, 0
         _ZCM_, _ZCM, _ZCR = 0, 0, 0
         c = 0
@@ -672,7 +659,6 @@ class Montgomery:
                 if j == 0:
                     qS, qC = compress([(TS & rmask) * M_, (TC & rmask) * M_])
                     q = (qS + qC) & rmask
-                # print(f'i={i}, q={q}') # checked
 
                 # line 11:
                 X_j, Mj = ith_word(X_, j, w), ith_word(M, j, w)  # X'_j, M_j
@@ -680,7 +666,7 @@ class Montgomery:
 
                 # line 12:
                 # c = 1 if (j == 0 and (OC & rmask) != 0) else 0
-                c = 1 if (j == 0 and (OS + OC & rmask) != 0) else 0
+                c = 1 if (j == 0 and (OC & rmask) != 0) else 0
 
                 # line 13-16:
                 _ZSM_ = update_ith_word(_ZSM_, j - 1 + 1, w, ith_word(_ZSM, j - 1 + 1, w))  # ZSM'_{j-1}
@@ -717,9 +703,9 @@ class Montgomery:
         Carry = c
 
         Z = 0
-        ZSM, ZCM = _ZSM >> w, _ZCM >> w  # checkout ZSM, ZCM
-        ZSM_, ZCM_ = _ZSM_ >> w, _ZCM_ >> w  # checkout ZSM', ZCM'
-        ZSR, ZCR = _ZSR >> w - m, _ZCR >> w - m  # checkout ZSR, ZCR
+        ZSM, ZCM = _ZSM >> w, _ZCM >> w
+        ZSM_, ZCM_ = _ZSM_ >> w, _ZCM_ >> w
+        ZSR, ZCR = _ZSR >> w - m, _ZCR >> w - m
         for i in range(e - 1):
             # line 28
             ZSMi, ZCMi = ith_word(ZSM, i, w), ith_word(ZCM, i, w)
@@ -840,7 +826,7 @@ if __name__ == '__main__':
     p = 61
     # M = Montgomery.factory(mod=p, mul_opt='real3').build(w=8)
 
-    M = Montgomery.factory(mod=p, mul_opt='real8').build(m=2, w=8)
+    M = Montgomery.factory(mod=p, mul_opt='real8').build(m=2, w=6)
     # M = Montgomery.factory(mod=p, mul_opt='real7').build(m=3, w=8)
     # M = Montgomery.factory(mod=p, mul_opt='real6').build(m=3, w=8)
     x = 46

@@ -3,7 +3,7 @@ from src.mont import Montgomery
 from common import *
 
 
-# Up-to data: 6/14/2024, real-{3,7,8} tests are failed
+# Up-to data: 6/16/2024, real-8 tests is failed
 
 class TestMontgomeryOperations(unittest.TestCase):
     def setUp(self):
@@ -33,32 +33,32 @@ class TestMontgomeryOperations(unittest.TestCase):
 
         if RADOMIZED:
 
-            # # real-1
-            # self.monts[1].config('real1').build()
-            #
-            # # real-2
-            # # self.monts[2].config('real2').build(R=1 << nextp2(self.monts[2].N).bit_length() + 2)
-            # self.monts[2].config('real2').build(n=nextp2(self.monts[2].N).bit_length() + 2)
-            #
-            # # real-3
+            # real-1
+            self.monts[1].config('real1').build()
+
+            # real-2
+            # self.monts[2].config('real2').build(R=1 << nextp2(self.monts[2].N).bit_length() + 2)
+            self.monts[2].config('real2').build(n=nextp2(self.monts[2].N).bit_length() + 2)
+
+            # real-3
             mont3 = Montgomery.factory(mod=large_primes[3], mul_opt='real3').build(w=5)
             self.monts[3] = mont3
-            #
-            # # real-4
-            # mont4 = Montgomery.factory(mod=large_primes[4], mul_opt='real4').build(m=4)
-            # self.monts[4] = mont4
-            #
-            # # real-5
-            # mont5 = Montgomery.factory(mod=large_primes[5], mul_opt='real5').build(m=5)
-            # self.monts[5] = mont5
-            #
-            # # real-6
-            # mont6 = Montgomery.factory(mod=large_primes[6], mul_opt='real6').build(m=6)
-            # self.monts[6] = mont6
-            #
-            # # todo> real-7
-            # mont7 = Montgomery.factory(mod=large_primes[7], mul_opt='real7').build(m=4, w=8)
-            # self.monts[7] = mont7
+
+            # real-4
+            mont4 = Montgomery.factory(mod=large_primes[4], mul_opt='real4').build(m=4)
+            self.monts[4] = mont4
+
+            # real-5
+            mont5 = Montgomery.factory(mod=large_primes[5], mul_opt='real5').build(m=5)
+            self.monts[5] = mont5
+
+            # real-6
+            mont6 = Montgomery.factory(mod=large_primes[6], mul_opt='real6').build(m=6)
+            self.monts[6] = mont6
+
+            # todo> real-7
+            mont7 = Montgomery.factory(mod=large_primes[7], mul_opt='real7').build(m=4, w=8)
+            self.monts[7] = mont7
 
             # todo> real-8
             # mont8 = Montgomery.factory(mod=large_primes[8], mul_opt='real8').build(m=2, w=8)
