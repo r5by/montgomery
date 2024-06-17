@@ -248,6 +248,9 @@ class Montgomery:
             if self.w < self.m * 2:
                 raise ValueError(f'Condition: w (w={self.w}) >= 2m (m={self.m}) is violated for real-8')
 
+            # if self.w >= self.n:
+            #     raise ValueError(f'w(={self.w}) cannot be greater than N(={self.n})')
+
             # setup R
             self.e = math.ceil((self.n + 2 * self.m + 2) / self.w)
             self.p = math.ceil((self.n + self.m + 2) / self.m)  # ref [2] section 3.2.1, ideal PE count
@@ -636,12 +639,12 @@ class Montgomery:
             # print(f'Outer-loop:{i}\n')
             # print('FBS:     ', hex(FBS))
             # print('FBC:     ', hex(FBC))
-            # print('ZSM\':   ', hex(ZSM_))
-            # print('ZCM\':   ', hex(ZCM_))
-            # print('ZSM:     ', hex(ZSM))
-            # print('ZCM:     ', hex(ZCM))
-            # print('ZSR:     ', hex(ZSR))
-            # print('ZCR:     ', hex(ZCR))
+            # print('ZSM\':   ', hex(_ZSM_ >> w))
+            # print('ZCM\':   ', hex(_ZCM_ >> w))
+            # print('ZSM:     ', hex(_ZSM >> w))
+            # print('ZCM:     ', hex(_ZCM >> w))
+            # print('ZSR:     ', hex(_ZSR >> w - m))
+            # print('ZCR:     ', hex(_ZCR >> w - m))
             # print('Yi:      ', hex(Yi))
             # print('M\':     ', hex(M_))
             # print('c:       ', hex(c))
@@ -665,7 +668,6 @@ class Montgomery:
                 OS, OC = compress([TS, TC, X_j * Yi, q * Mj, FBS, FBC])
 
                 # line 12:
-                # c = 1 if (j == 0 and (OC & rmask) != 0) else 0
                 c = 1 if (j == 0 and (OC & rmask) != 0) else 0
 
                 # line 13-16:
@@ -690,12 +692,12 @@ class Montgomery:
             _ZCM = update_ith_word(_ZCM, -1 + 1, w, 0)
 
             # print('Outter loop results: \n')
-            # print('ZSM\':   ', hex(ZSM_))
-            # print('ZCM\':   ', hex(ZCM_))
-            # print('ZSM:     ', hex(ZSM))
-            # print('ZCM:     ', hex(ZCM))
-            # print('ZSR:     ', hex(ZSR))
-            # print('ZCR:     ', hex(ZCR))
+            # print('ZSM\':   ', hex(_ZSM_ >> w))
+            # print('ZCM\':   ', hex(_ZCM_ >> w))
+            # print('ZSM:     ', hex(_ZSM >> w))
+            # print('ZCM:     ', hex(_ZCM >> w))
+            # print('ZSR:     ', hex(_ZSR >> w - m))
+            # print('ZCR:     ', hex(_ZCR >> w - m))
             # print("\n")
 
         # line 25, 26
@@ -706,7 +708,7 @@ class Montgomery:
         ZSM, ZCM = _ZSM >> w, _ZCM >> w
         ZSM_, ZCM_ = _ZSM_ >> w, _ZCM_ >> w
         ZSR, ZCR = _ZSR >> w - m, _ZCR >> w - m
-        for i in range(e - 1):
+        for i in range(e):
             # line 28
             ZSMi, ZCMi = ith_word(ZSM, i, w), ith_word(ZCM, i, w)
             ZSRi, ZCRi = ith_word(ZSR, i, w - m), ith_word(ZCR, i, w - m)
@@ -727,7 +729,7 @@ class Montgomery:
             # update Z
             Z += Zi << (i * w)
 
-        return Z
+        return self.correction(Z)
 
     def multiply(self, a: int, b: int) -> int:
         # This method delegates to the currently configured multiplication method
@@ -820,15 +822,14 @@ class MontgomeryNumber:
 
 # todo> remove: quick tb
 if __name__ == '__main__':
-    # pass
     # region sample usage
     # M = Montgomery.factory(mod=31, mul_opt='real5').build(m=4)
     p = 61
     # M = Montgomery.factory(mod=p, mul_opt='real3').build(w=8)
 
-    M = Montgomery.factory(mod=p, mul_opt='real8').build(m=2, w=6)
-    # M = Montgomery.factory(mod=p, mul_opt='real7').build(m=3, w=8)
-    # M = Montgomery.factory(mod=p, mul_opt='real6').build(m=3, w=8)
+    M = Montgomery.factory(mod=p, mul_opt='real8').build(m=2, w=5)
+    # M = Montgomery.factory(mod=p, mul_opt='real7').build(m=2, w=5)
+    # M = Montgomery.factory(mod=p, mul_opt='real6').build(m=2, w=5)
     x = 46
 
     _x = M(x)

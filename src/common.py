@@ -17,9 +17,12 @@ update_ith_word = lambda n, i, w, v: (n & ~(((1 << w) - 1) << (i * w))) | (v << 
 concatenate = lambda a, b, w: a << w | b
 num_from_list = lambda zlist, w: sum(bit << (index * w) for index, bit in enumerate(zlist))
 
-
 # Constants
 REG_SIZE = 256  # the register size in bits
+
+# Configuration of compressor
+config = load_config()
+COMP_TYPE = config.get('COMP_TYPE', 'seq')
 
 
 def decompose(Z, w, m):
@@ -30,7 +33,7 @@ def decompose(Z, w, m):
     return ZM, ZR
 
 
-def compress(numbers, _bits=None):
+def compress_ternary(numbers, _bits=None):
     '''
         Ternary tree CSA of a given number list
         NOTE!! _bits must be greater than the sum of all numbers, o.w. will cause the loss of precision error
@@ -69,8 +72,21 @@ def compress(numbers, _bits=None):
             tmp.extend(numbers[i:])
         numbers = tmp
 
-    # return csa(numbers[0], numbers[1], 0)
     return numbers[0], numbers[1]
+
+
+def compress_sequential(numbers, _bits=None):
+    if len(numbers) < 2:
+        raise ValueError(f'Must compress more than 2 numbers')
+
+    if len(numbers) == 2:
+        return numbers[0], numbers[1]
+
+    s, c = numbers[0], numbers[1]
+    for e in numbers[2:]:
+        s, c = csa(s, c, e, _bits)
+
+    return s, c
 
 
 def csa(x, y, z, _T=REG_SIZE):
@@ -212,3 +228,16 @@ def bin_inv(a, p, b=1):
 def co_prime(a, b):
     _, _, d = xgcd(a, b)
     return d == 1
+
+
+def get_compressor():
+    if COMP_TYPE == 'seq':
+        return compress_sequential
+    elif COMP_TYPE == 'ter':
+        return compress_ternary
+    else:
+        raise ValueError("Unknown compressor type specified")
+
+
+# Expose the chosen compress function
+compress = get_compressor()

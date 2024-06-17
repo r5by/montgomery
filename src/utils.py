@@ -6,7 +6,9 @@ import sympy
 from functools import reduce
 from operator import mul
 import random
-import os
+import json
+import signal
+from contextlib import contextmanager
 
 # lambdas
 random_list = lambda low, high, count: [random.randint(low, high) for _ in range(count)]
@@ -96,3 +98,29 @@ def bi_factor(n):
     h = len(flist) >> 1
     n1 = reduce(mul, flist[:h])
     return n1, n // n1
+
+
+def load_config():
+    with open('../config.json', 'r') as file:
+        return json.load(file)
+
+
+class TimeoutException(Exception):
+    pass
+
+
+@contextmanager
+def timeout(time):
+    # Signal handler function
+    def raise_timeout(signum, frame):
+        raise TimeoutException()
+
+    # Set the signal handler and a timer
+    signal.signal(signal.SIGALRM, raise_timeout)
+    signal.alarm(time)
+
+    try:
+        yield
+    finally:
+        # Disable the alarm
+        signal.alarm(0)
