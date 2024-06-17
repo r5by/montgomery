@@ -55,8 +55,7 @@ assert _y == y_
 
 ## Known Issues
 
-Realization 3, 7 and 8 in reference [2] are currently unavailable.
-
+Realization 8 in reference [2] only works for sequential compressor not ternary one, finding out why...
 
 ## References
 1. [Montgomery inversion](https://link.springer.com/article/10.1007/s13389-017-0161-x)
