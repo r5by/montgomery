@@ -25,7 +25,7 @@ class TestMontgomeryOperations(unittest.TestCase):
 
         if not os.path.exists(filename):
             # Generate prime numbers
-            large_primes = generate_large_primes(num_primes, 7)
+            large_primes = generate_large_primes(num_primes, 2048)
             save_to_file(large_primes)
         else:
             large_primes = load_primes_from_file(filename)
@@ -62,7 +62,7 @@ class TestMontgomeryOperations(unittest.TestCase):
             # self.monts[7] = mont7
 
             # todo> only works for sequential compressor?
-            mont8 = Montgomery.factory(mod=large_primes[0], mul_opt='real8').build(m=3, w=6)
+            mont8 = Montgomery.factory(mod=large_primes[0], mul_opt='real8').build(m=64, w=256)
             self.monts[0] = mont8
 
         else:

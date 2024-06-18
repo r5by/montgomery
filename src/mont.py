@@ -11,6 +11,7 @@
 from typing import Optional, Union
 from common import *
 import math
+from sim import compressor_2m4to2
 
 
 class Montgomery:
@@ -665,7 +666,8 @@ class Montgomery:
 
                 # line 11:
                 X_j, Mj = ith_word(X_, j, w), ith_word(M, j, w)  # X'_j, M_j
-                OS, OC = compress([TS, TC, X_j * Yi, q * Mj, FBS, FBC])
+                # OS, OC = compress([TS, TC, X_j * Yi, q * Mj, FBS, FBC])  # naive approach fails!
+                OS, OC = compressor_2m4to2(TS, TC, X_j, Yi, q, Mj, FBS, FBC, w, m)
 
                 # line 12:
                 c = 1 if (j == 0 and (OC & rmask) != 0) else 0

@@ -25,6 +25,61 @@ config = load_config()
 COMP_TYPE = config.get('COMP_TYPE', 'seq')
 
 
+# todo> booth_compressor
+# def booth_multiplier(multiplicand, multiplier):
+#     # Get the size of the numbers
+#     n = max(multiplicand.bit_length(), multiplier.bit_length()) + 1
+#     # Create masks for sign extension
+#     max_value = (1 << n) - 1
+#
+#     # Sign extend multiplicand and multiplier
+#     if multiplicand & (1 << (n - 1)):
+#         multiplicand = multiplicand | (~max_value)
+#     if multiplier & (1 << (n - 1)):
+#         multiplier = multiplier | (~max_value)
+#
+#     # Initialize product and carry
+#     product = 0
+#     carry = 0
+#
+#     # Booth's encoding for multiplier, extend with zeros
+#     multiplier <<= 2
+#
+#     print(f"Initial values: Multiplicand = {bin(multiplicand)}, Multiplier = {bin(multiplier)}")
+#
+#     for i in range(n):
+#         # Check the two least significant bits of the multiplier and the carry
+#         bits = (multiplier & 3) | (carry << 2)
+#
+#         if bits == 1 or bits == 4:  # 01 or 10
+#             product += multiplicand
+#         elif bits == 2 or bits == 5:  # 10
+#             product -= multiplicand
+#
+#         # Arithmetic shift right (multiplier and product)
+#         carry = multiplier & (1 << 1)
+#         multiplier >>= 1
+#         multiplier |= (carry << (2 * n - 1))  # Extend sign bit if the second last bit was 1
+#         product >>= 1
+#         product |= (carry << (2 * n - 1))  # Keep sign extension
+#
+#         print(f"Step {i + 1}: Product = {bin(product)}, Multiplier = {bin(multiplier)}")
+#
+#     # Adjust product for final result
+#     product >>= 1  # Remove the appended bit
+#
+#     return product
+#
+#
+# # Example usage:
+# multiplicand = 13  # 1101 in binary
+# multiplier = -3  # Represented in two's complement
+#
+# # Simulate Booth's multiplication algorithm
+# result = booth_multiplier(multiplicand, multiplier)
+# print(f"Final product: {result}, in binary: {bin(result)}")
+
+
 def decompose(Z, w, m):
     ''' Z = ZM(major part) + ZR(remainder part), where ZR is the least significant (w-m) bits'''
     mask = (1 << w - m) - 1
