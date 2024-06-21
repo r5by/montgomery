@@ -14,9 +14,9 @@ class TestMontgomeryOperations(unittest.TestCase):
         num_primes = 1  # num of primes >= num of domains; change this shall delete the data file to regenerate primes
 
         if self.RADOMIZED:
-            filename = 'm_primes.data'
+            filename = 'm_primes_256.data'
             domains = 1  # p for Z_p :
-            self.num_count = 10  # randomly generated repr. numbers in Z_p
+            self.num_count = 100 # randomly generated repr. numbers in Z_p
         else:
             # fixed
             filename = 't_primes.data'
@@ -25,7 +25,7 @@ class TestMontgomeryOperations(unittest.TestCase):
 
         if not os.path.exists(filename):
             # Generate prime numbers
-            large_primes = generate_large_primes(num_primes, 2048)
+            large_primes = generate_large_primes(num_primes, 256)
             save_to_file(large_primes)
         else:
             large_primes = load_primes_from_file(filename)

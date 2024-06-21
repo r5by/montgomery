@@ -670,7 +670,7 @@ class Montgomery:
                 OS, OC = compressor_2m4to2(TS, TC, X_j, Yi, q, Mj, FBS, FBC, w, m)
 
                 # line 12:
-                c = 1 if (j == 0 and (OC & rmask) != 0) else 0
+                c = 1 if (j == 0 and (OC & rmask) != 0) else c
 
                 # line 13-16:
                 _ZSM_ = update_ith_word(_ZSM_, j - 1 + 1, w, ith_word(_ZSM, j - 1 + 1, w))  # ZSM'_{j-1}
