@@ -666,11 +666,12 @@ class Montgomery:
 
                 # line 11:
                 X_j, Mj = ith_word(X_, j, w), ith_word(M, j, w)  # X'_j, M_j
-                # OS, OC = compress([TS, TC, X_j * Yi, q * Mj, FBS, FBC])  # naive approach fails!
-                OS, OC = compressor_2m4to2(TS, TC, X_j, Yi, q, Mj, FBS, FBC, w, m)
+                OS, OC = compress([TS, TC, X_j * Yi, q * Mj, FBS, FBC])  # doesn't matter if using either impl. of
+                # compressor
+                # OS, OC = compressor_2m4to2(TS, TC, X_j, Yi, q, Mj, FBS, FBC, w, m)
 
                 # line 12:
-                c = 1 if (j == 0 and (OC & rmask) != 0) else c
+                c = 1 if (j == 0 and (OS & rmask) != 0) else c
 
                 # line 13-16:
                 _ZSM_ = update_ith_word(_ZSM_, j - 1 + 1, w, ith_word(_ZSM, j - 1 + 1, w))  # ZSM'_{j-1}

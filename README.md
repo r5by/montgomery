@@ -53,9 +53,20 @@ assert _x == x_
 assert _y == y_
 ```
 
-## Known Issues
+## Important Note
 
-Realization 8 in reference [2] only works for sequential compressor not ternary one, finding out why...
+In Line 12 of Realization 8, the value of `c` is assigned at the beginning of the inner loop `(j == 0)` and remains 
+constant throughout the entire loop. This design is crucial because the value of `c` prepared during the i-th 
+outer-loop iteration is utilized in the {i+1}-th iteration. The conditional checks for either `OS` or `OC` are both 
+considered valid with the explanations provided between formulas 22 and 23 in the article.
+
+Regarding the compressor implementation, different approaches (whether sequential or based on a ternary tree) yield 
+inconsistent intermediate results, as evident when comparing Realizations 7 and 8. However, these discrepancies do 
+not compromise the algorithm's correctness. The apparent inconsistency mainly arises because more items being 
+processed by the compressor increase the likelihood of executing the `c=0` branch rather than the `c=1` branch. Thus 
+extra carefulness need to be paid here to test both branches during the HW verification phase, as the `c=1` branch 
+hardly gets 
+covered.
 
 ## References
 1. [Montgomery inversion](https://link.springer.com/article/10.1007/s13389-017-0161-x)
