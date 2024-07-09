@@ -1,0 +1,102 @@
+\documentclass{article}
+
+\usepackage[english]{babel}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{amsmath}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{definition}{Definition}
+
+\begin{document}
+    \section{Quick LCM}
+
+    \begin{lemma}
+        Given \(R=2^n\) where n is any positive integer, all odd numbers \(x < R\) forms the
+        unit group of R denoted by \(Z_R^{\times}\) for \(Z_R=Z/RZ\).
+    \end{lemma}
+
+    \renewcommand\qedsymbol{$\blacksquare$}
+
+    \begin{proof}
+        Because \(gcd(x, R)=1\) for all positive odd numbers, by definition the lemma holds.
+    \end{proof}
+
+    \begin{definition}
+        Let \(d, b \in \mathbb{Z}\). We denote \(d\) divides \(b\), written as \(d \mid b\), if \(\exists c \in \mathbb{Z}\) s.t. \(b = c \cdot d\).
+        Given \(\mathbb{Z}\) is a Euclidean domain under the size function \( g(n)=|n| \), it can be clearly inferred
+        \(g(c) \leq g(b)\) and \(g(d) \leq g(b)\).
+    \end{definition}
+
+
+    \begin{corollary}
+        \label{coro1}
+        For any two elements \(b, d \in Z_R^\times\), if \(d \mid b\), then \(\frac{b}{d}=b \cdot d^{-1} \pmod{R}\),
+        where
+        \(d \cdot d^{-1}=1 \pmod{R}\)
+    \end{corollary}
+
+    \begin{proof}
+        Because \(d \mid b\) and b, d are coprimes to R, we know \(0 < c=\frac{b}{d} \leq b < R\) must be also comprime
+        with R, therefore \(c \in Z_R^{\times}\). Since \(c \cdot d = b = b \cdot d^{-1} \cdot d \pmod{R}\), by the
+        cancellation law in group \(Z_R^\times\) we have \(\frac{b}{d}= c = b \cdot d^{-1} \pmod{R}\).
+    \end{proof}
+
+
+    \begin{theorem}[2nd Isomorphism Theorem for Rings]
+        \label{2iso}
+        Suppose R is a ring with ideals \(I, J \subseteq R \), then
+        \[ \frac{I}{I \cap J} \cong \frac{I+J}{J}\]
+    \end{theorem}
+
+
+    \begin{lemma}
+        \label{liso}
+        For all \(a, b \in \mathbb{N}\)
+        \[ lcm(a,b) \cdot gcd(a, b) = a \cdot b\]
+    \end{lemma}
+
+    \begin{proof}
+        Let's denote \(l=lcm(a,b), d=gcd(a,b)\) and by \(d \mid a\), we have \( \mathbb{Z}_\frac{a}{d} \cong d\mathbb{Z}/a\mathbb{Z} \)
+        . It
+        can also be proved that \(d\mathbb{Z} = a\mathbb{Z} + b\mathbb{Z}\) and \(lZ = a\mathbb{Z} \cap b\mathbb{Z} \), it can be inferred
+        by the 2nd isomorphism theorem that:
+        \[ d\mathbb{Z}/a\mathbb{Z} = \dfrac{a\mathbb{Z} + b\mathbb{Z}}{a\mathbb{Z}} \cong \dfrac{b\mathbb{Z}}{a\mathbb{Z} \cap b\mathbb{Z}} = b\mathbb{Z}/l\mathbb{Z} \]
+        Therefore, \(\mathbb{Z}_\frac{a}{d} \cong \mathbb{Z}_\frac{l}{b} \), takes the equality from the orders of
+        both sides we thus
+        have
+        the lemma proved.
+    \end{proof}
+
+    \begin{theorem}[Reduced lcm theorem]
+        \label{rlcm}
+        Given \(a, b\) as two positive odd integers, suppose \(d=gcd(a,b)\) and \(R=2^n > a \geq b\) for some
+        positive integer \(n\). We state that the Least Common Multiple (LCM) of a and b, denoted by \(l=lcm(a,b)\)
+        can be derived from the following equation:
+        \[ l=a \cdot (b \cdot d^{-1} \pmod{R}) \]
+    \end{theorem}
+
+    \begin{proof}
+        Because \(l=a \cdot (\frac{b}{d})\) and from Corollary~\ref{coro1} and Lemma~\ref{liso}, the theorem
+        obviously
+        holds.
+    \end{proof}
+
+
+
+
+
+    \begin{theorem}[Quick lcm theorem]
+        Given \(A, B\) as two positive integers, and \(A=2^k \cdot a, B=2^m \cdot b\) for some positive integers
+        \(k, m\) along with a and b as the reduced odd integers. Then:
+        \[ lcm(A,B) = 2^{max(k, m)} \cdot lcm(a, b) \]
+    \end{theorem}
+
+    \begin{proof}
+        Since \(2^{max(a, b)} \mid lcm(A, B)\) and \(2 \nmid lcm(a, b)\), with Thereom~\ref{rlcm} the theorem
+        obviously holds.
+    \end{proof}
+
+\end{document}

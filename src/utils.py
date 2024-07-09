@@ -10,6 +10,10 @@ import json
 import signal
 from contextlib import contextmanager
 
+from math import sqrt
+from numpy import array
+from mpmath import mpf
+
 # lambdas
 random_list = lambda low, high, count: [random.randint(low, high) for _ in range(count)]
 
@@ -124,3 +128,74 @@ def timeout(time):
     finally:
         # Disable the alarm
         signal.alarm(0)
+
+
+#region Find addition chain
+# I steal it shamelessly from:
+#   https://rosettacode.org/wiki/Addition-chain_exponentiation#Python
+'''  Rosetta Code task Addition-chain_exponentiation  '''
+
+
+class AdditionChains:
+    ''' two methods of calculating addition chains '''
+
+    def __init__(self):
+        ''' memoization for knuth_path '''
+        self.chains, self.idx, self.pos = [[1]], 0, 0
+        self.pat, self.lvl = {1: 0}, [[1]]
+
+    def add_chain(self):
+        ''' method 1: add chains depth then breadth first until done '''
+        newchain = self.chains[self.idx].copy()
+        newchain.append(self.chains[self.idx][-1] +
+                        self.chains[self.idx][self.pos])
+        self.chains.append(newchain)
+        if self.pos == len(self.chains[self.idx]) - 1:
+            self.idx += 1
+            self.pos = 0
+        else:
+            self.pos += 1
+        return newchain
+
+    def find_chain(self, nexp):
+        ''' method 1 interface: search for chain ending with n, adding more as needed '''
+        assert nexp > 0
+        if nexp == 1:
+            return [1]
+        chn = next((a for a in self.chains if a[-1] == nexp), None)
+        if chn is None:
+            while True:
+                chn = self.add_chain()
+                if chn[-1] == nexp:
+                    break
+
+        return chn
+
+    def knuth_path(self, ngoal):
+        ''' method 2: knuth method, uses memoization to search for a shorter chain '''
+        if ngoal < 1:
+            return []
+        while not ngoal in self.pat:
+            new_lvl = []
+            for i in self.lvl[0]:
+                for j in self.knuth_path(i):
+                    if not i + j in self.pat:
+                        self.pat[i + j] = i
+                        new_lvl.append(i + j)
+
+            self.lvl[0] = new_lvl
+
+        returnpath = self.knuth_path(self.pat[ngoal])
+        returnpath.append(ngoal)
+        return returnpath
+
+
+def cpow(xbase, chain):
+    ''' raise xbase by an addition exponentiation chain for what becomes x**chain[-1] '''
+    pows, products = 0, {0: 1, 1: xbase}
+    for i in chain:
+        products[i] = products[pows] * products[i - pows]
+        pows = i
+    return products[chain[-1]]
+
+#endregion

@@ -25,7 +25,7 @@ config = load_config()
 COMP_TYPE = config.get('COMP_TYPE', 'seq')
 
 
-# todo> booth_compressor
+#region todo> booth_compressor
 # def booth_multiplier(multiplicand, multiplier):
 #     # Get the size of the numbers
 #     n = max(multiplicand.bit_length(), multiplier.bit_length()) + 1
@@ -78,7 +78,7 @@ COMP_TYPE = config.get('COMP_TYPE', 'seq')
 # # Simulate Booth's multiplication algorithm
 # result = booth_multiplier(multiplicand, multiplier)
 # print(f"Final product: {result}, in binary: {bin(result)}")
-
+#endregion
 
 def decompose(Z, w, m):
     ''' Z = ZM(major part) + ZR(remainder part), where ZR is the least significant (w-m) bits'''
@@ -278,6 +278,59 @@ def bin_inv(a, p, b=1):
             x2 -= x1
 
     return x1 % p if u == 1 else x2 % p
+
+
+def lcm(a: int, b: int) -> int:
+    """Compute the Least Common Multiple of a and b with optimizations."""
+    pa, pb = 0, 0
+
+    # Reduce a and b by removing factors of 2
+    while a & 1 == 0:
+        a >>= 1
+        pa += 1
+    while b & 1 == 0:
+        b >>= 1
+        pb += 1
+
+    # Calculate the maximum power of two encountered
+    p = max(pa, pb)
+
+    l = _lcm(a, b)
+
+    # Adjust the final LCM for the maximal power of two
+    l <<= p
+
+    return l
+
+
+def _lcm(a: int, b: int) -> int:
+    ''' LCM of two odd number a and b'''
+    _, _, d = xgcd(a, b)
+
+    if d == 1:
+        return a * b
+
+    n = b.bit_length()
+    mask = (1 << n) - 1
+    # _d, _, _ = xgcd(d, 1 << n)
+    _d = -mont_const(d, n)
+    return a * ((b * _d) & mask)
+
+
+def mont_const(x, w):
+    '''
+        a.k.a Montgomery constant N', for rr'-NN'=1, where r=2^w is the radix that is other than 2 or R
+        refer: [3] p.18, Alg. 2.3
+    :return:
+    '''
+    y = 1
+    for i in range(2, w + 1):
+        if y * x & ((1 << i) - 1) == 1:
+            continue
+
+        y += (1 << i - 1)
+
+    return (1 << w) - y  # r - y
 
 
 def co_prime(a, b):

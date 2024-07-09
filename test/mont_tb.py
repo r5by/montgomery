@@ -12,11 +12,12 @@ class TestMontgomeryOperations(unittest.TestCase):
 
         self.RADOMIZED = 1
         num_primes = 1  # num of primes >= num of domains; change this shall delete the data file to regenerate primes
+        self.MAX_EXP = 10000  # maximum power to be tested
 
         if self.RADOMIZED:
             filename = 'm_primes_256.data'
             domains = 1  # p for Z_p :
-            self.num_count = 100 # randomly generated repr. numbers in Z_p
+            self.num_count = 100  # randomly generated repr. numbers in Z_p
         else:
             # fixed
             filename = 't_primes.data'
@@ -31,7 +32,8 @@ class TestMontgomeryOperations(unittest.TestCase):
             large_primes = load_primes_from_file(filename)
 
         self.rands = random_list(low=2, high=max(large_primes), count=self.num_count)
-        self.monts = [Montgomery.factory(mod=large_primes[i]).build() for i in range(domains)]
+        # self.monts = [Montgomery.factory(mod=large_primes[i]).build() for i in range(domains)]
+        self.monts = []
 
         if self.RADOMIZED:
 
@@ -63,7 +65,7 @@ class TestMontgomeryOperations(unittest.TestCase):
 
             # todo> only works for sequential compressor?
             mont8 = Montgomery.factory(mod=large_primes[0], mul_opt='real8').build(m=64, w=256)
-            self.monts[0] = mont8
+            self.monts.append(mont8)
 
         else:
             # customized fixed case here
@@ -154,6 +156,32 @@ class TestMontgomeryOperations(unittest.TestCase):
                 self.assertEqual(act, exp)
                 self.assertEqual(act1, exp1)
                 self.assertEqual(act2, exp2)
+
+                print(f'done: {cnt + 1}/{total}%')
+                cnt += 1
+
+    def test_exponentiation(self):
+
+        cnt, total = 0, self.num_count
+        for i in range(self.num_count):
+
+            x = self.rands[i]
+            e = random.randint(1, self.MAX_EXP)
+            e1 = (1 << i + 1) + 1  # particularly covers e = 2^k + 1 cases, for k >= 1
+
+            for mont in self.monts:
+                p = mont.N
+                x = x % p
+                x_ = mont(x)
+
+                act = x_ ** e
+                exp = mont((x ** e) % p)
+                self.assertEqual(act, exp)
+
+                if e1 < self.MAX_EXP:  # This tiny python code can't handle too large an exponent value
+                    act1 = x_ ** e1
+                    exp1 = mont((x ** e1) % p)
+                    self.assertEqual(act1, exp1, f'Exponential test e={e1}=(2^(k+1) + 1) for k={i} fails!')
 
                 print(f'done: {cnt + 1}/{total}%')
                 cnt += 1

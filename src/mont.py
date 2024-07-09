@@ -7,11 +7,20 @@
 # [2] [High-Radix Design of a Scalable Montgomery Modular Multiplier With Low Latency](
 # https://ieeexplore.ieee.org/abstract/document/9328560)
 # [3] [Topics in Computational Number Theory Inspired by Peter L. Montgomery](https://www.cambridge.org/core/books/topics-in-computational-number-theory-inspired-by-peter-l-montgomery/4F7A9AE2CE219D490B7D253558CF6F00)
+# [4] [Handbook of applied cryptography]()
+# [5] [The Montgomery Powering Ladder](https://cr.yp.to/bib/2003/joye-ladder.pdf)
 ## @author: Luke Li<zhongwei.li@mavs.uta.edu>
 from typing import Optional, Union
 from common import *
 import math
 from sim import compressor_2m4to2
+from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
+
+# Pre-config
+DEFAULT_MUL_OPT = config.get('DEFAULT_MUL_OPT', 'real1')
+DEFAULT_EXP_OPT = config.get('DEFAULT_EXP_OPT', 'exp1')
+CORES = config.get('TOTAL_CORES', 0)  # available cores for parallel processing (for exp usage)
 
 
 class Montgomery:
@@ -31,6 +40,10 @@ class Montgomery:
         self.mul_opt: Optional[str] = None  # multiplication method configuration (can choose various implementations)
         self.mul = None  # the method
 
+        self.exp_opt: Optional[str] = None  # exponentiation method configuration (can choose various implementations)
+        self.exp = None  # the method
+        self.cores: Optional[int] = CORES  # multiple processors available for exponentiation
+
         # multiplication algorithm (realization specific)
         self.e: Optional[int] = None  # real-3 specific
         self.n_m: Optional[int] = None  # real-4 specific, R=r**n_m, where r=2**m is the radix
@@ -40,7 +53,7 @@ class Montgomery:
         self.k: Optional[int] = None  # real-8 specific
 
     @classmethod
-    def factory(cls, mod: int, mul_opt: str = 'real1') -> 'Montgomery':
+    def factory(cls, mod: int, mul_opt: str = DEFAULT_MUL_OPT, exp_opt: str = DEFAULT_EXP_OPT) -> 'Montgomery':
         if not mod & 1:
             raise ValueError("The modulus must be an odd number (prime actually).")  # todo> primality test here
             # probably?
@@ -48,7 +61,7 @@ class Montgomery:
         inst = cls()
         inst.N = mod
 
-        return inst.config(mul_opt)
+        return inst.config(mul_opt, exp_opt)
 
     @property
     def N(self):
@@ -269,7 +282,7 @@ class Montgomery:
         return MontgomeryNumber(v_, self)
 
     def __pre_calc(self):
-        self.R2 = self.__pre_calc_R2()  # R^2 % N
+        self.ONE, self.R2 = self.__pre_calc_R2()  # R % N and R**2 % N
         self.N_ = self.__pre_calc_N_()  # N' for rr'-NN'=1
 
     def enter_domain(self, a):
@@ -281,12 +294,14 @@ class Montgomery:
     def __pre_calc_R2(self):
         # Use (wn + 1) rounds of modulo addition to get R^2 % N, where R = 2^{wn}
         # refer: [3] p.19
-        ci = self.R % self.N  # c0 = R
+        # update 7/9/2024: also returns the identity in the Mont domain for exponentiation usage
+        c0 = self.R % self.N  # c0 = R % N
+        ci = c0
         wn = self.R.bit_length() - 1
         for _ in range(wn):
             ci = (ci + ci) % self.N
 
-        return ci
+        return c0, ci
 
     def __pre_calc_N_(self):
         return self.mont_const(self.m)
@@ -306,31 +321,44 @@ class Montgomery:
 
         return (1 << w) - y  # r - y
 
-    def config(self, mul_opt='real1'):
+    def config(self, mul_opt=None, exp_opt=None):
 
-        if self.mul_opt == mul_opt:
-            return self
+        if mul_opt is not None and mul_opt != self.mul_opt:
+            self.mul_opt = mul_opt
+            if mul_opt == 'real1':
+                self.mul = self.real1_FPR2tN
+            elif mul_opt == 'real2':
+                self.mul = self.real2_FPR2t1
+            elif mul_opt == 'real3':
+                self.mul = self.real3_MWR2t1
+            elif mul_opt == 'real4':
+                self.mul = self.real4_FPR2tm
+            elif mul_opt == 'real5':
+                self.mul = self.real5_FPR2tm_v1
+            elif mul_opt == 'real6':
+                self.mul = self.real6_FPR2tm_v2
+            elif mul_opt == 'real7':
+                self.mul = self.real7_FPR2tm_v3
+            elif mul_opt == 'real8':
+                self.mul = self.real8_MWR2tm
+            else:
+                raise ValueError("Unsupported configuration mode for multiplication.")
 
-        self.mul_opt = mul_opt
-
-        if mul_opt == 'real1':
-            self.mul = self.real1_FPR2tN
-        elif mul_opt == 'real2':
-            self.mul = self.real2_FPR2t1
-        elif mul_opt == 'real3':
-            self.mul = self.real3_MWR2t1
-        elif mul_opt == 'real4':
-            self.mul = self.real4_FPR2tm
-        elif mul_opt == 'real5':
-            self.mul = self.real5_FPR2tm_v1
-        elif mul_opt == 'real6':
-            self.mul = self.real6_FPR2tm_v2
-        elif mul_opt == 'real7':
-            self.mul = self.real7_FPR2tm_v3
-        elif mul_opt == 'real8':
-            self.mul = self.real8_MWR2tm
-        else:
-            raise ValueError("Unsupported configuration mode for multiplication.")
+        # Check and update exponentiation option if provided and different
+        if exp_opt is not None and exp_opt != self.exp_opt:
+            self.exp_opt = exp_opt
+            if exp_opt == 'bin':
+                self.exp = self.exp_bin
+            elif exp_opt == 'bin-safe':
+                self.exp = self.exp_bin_safe
+            elif exp_opt == 'mont-ladder':
+                self.exp = self.exp_mont_ladder
+            elif exp_opt == 'mont-ladder-parallel':
+                self.exp = self.exp_mont_ladder_parallel
+            elif exp_opt == 'mont-ladder-safe':
+                self.exp = self.exp_mont_ladder_safe
+            else:
+                raise ValueError("Unsupported configuration mode for exponentiation.")
 
         return self
 
@@ -740,6 +768,160 @@ class Montgomery:
             raise ValueError("Multiplication method not configured (call factory constructor first)")
         return self.mul(a, b)
 
+    def exp_bin(self, x: int, e: int) -> int:
+        '''
+            [4] p620 Alg. 14.94, enter/exit mont domain at beginning & end removed
+        '''
+        A = self.ONE
+        t = e.bit_length() - 1
+
+        for i in range(t, -1, -1):
+            A = self.multiply(A, A)
+            if (e >> i) & 1:
+                A = self.multiply(x, A)
+
+        return A
+
+    def exp_bin_safe(self, x: int, e: int) -> int:
+        '''
+            Side-channel attack resistence version of binary exp.
+        '''
+        A = self.ONE
+        t = e.bit_length() - 1
+
+        for i in range(t, -1, -1):
+            A = self.multiply(A, A)
+            Ax = self.multiply(x, A)
+            A = Ax if (e >> i) & 1 else A
+
+        return A
+
+    def exp_mont_ladder(self, x: int, e: int) -> int:
+        '''
+            [5] Fig.1. Montgomery ladder for Abelian groups
+        '''
+        r0, r1 = self.ONE, x
+        t = e.bit_length()
+
+        for i in range(t, -1, -1):
+            if (e >> i) & 1:
+                r0 = self.multiply(r0, r1)
+                r1 = self.multiply(r1, r1)
+            else:
+                r1 = self.multiply(r0, r1)
+                r0 = self.multiply(r0, r0)
+
+        return r0
+
+    def exp_mont_ladder_parallel(self, x: int, e: int) -> int:
+        '''
+            Perform exponentiation using the Montgomery ladder method with parallel processing.
+        '''
+
+        R = [self.ONE, x]  # Register set (r0, r1)
+        t = e.bit_length()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            for i in range(t - 1, -1, -1):
+                b = ith_bit(e, i)
+
+                # Simulate two processors compute intermediate results in parallel
+                futures = {}
+                futures[~b] = executor.submit(self.multiply, R[0], R[1])
+                futures[b] = executor.submit(self.multiply, R[b], R[b])
+
+                # Retrieve results
+                R[~b] = futures[~b].result()
+                R[b] = futures[b].result()
+
+        return R[0]
+
+    def exp_mont_ladder_safe(self, x: int, e: int) -> int:
+        '''
+            A side-channel and M safe-error protected version of montgomery ladder
+            ref: [5] Fig. 9.
+        '''
+
+        R = [self.ONE, x]  # Register set (r0, r1)
+        t = e.bit_length()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            for i in range(t - 1, -1, -1):
+                kj = ith_bit(e, i)
+                b = ~kj
+
+                # Simulate two processors compute intermediate results in parallel
+                futures = {}
+                futures[b] = executor.submit(self.multiply, R[b], R[kj])
+                futures[kj] = executor.submit(self.multiply, R[kj], R[kj])
+
+                # Retrieve results
+                R[b] = futures[b].result()
+                R[kj] = futures[kj].result()
+
+        return R[0]
+
+    def exp_addition_chain(self, x: int, e: int) -> int:
+        '''
+            (shortest) Addition chain of n is denoted by l(n), it can be proved:
+            l(2^{k+1} + 1) = l(2^k).append(2^k + 1)
+        :param x: base from any Abelian group
+        :param e: exponent that is power of 2 + 1
+        :return: x**e
+        '''
+        k = (e - 1).bit_length() - 2
+        r = x
+        for _ in range(k):
+            r = self.multiply(r, r)
+
+        t = self.multiply(r, x)  # t = g**{k + 1}
+        return self.multiply(r, t)
+
+    def _compute_ai(self, g, ei, r):
+        '''
+            Compute the a_i for base g to the power of effective exponent (2^r)^e_i
+        '''
+        ai = self.exp(g, 1 << r)
+        ai = self.exp(ai, ei)
+        return ai
+
+    def parallel_exp(self, x: int, e: int) -> int:
+        '''
+            Parallelization using k processors
+            ref: [?] Algorithm 2.
+        '''
+        # Split the exponent e into k parts
+        k = self.cores
+        ww = math.ceil(e.bit_length() / k)
+        E = [ith_word(e, i, ww) for i in range(k)]
+
+        args = [(x, E[i], ww * i) for i in range(k)]
+        with multiprocessing.Pool(processes=k) as pool:
+            factors = pool.starmap(self._compute_ai, args)
+
+        # Multiply all factors to produce final result
+        fin = self.ONE
+        for a in factors:
+            fin = self.multiply(fin, a)
+
+        return fin
+
+    def power(self, x: int, e: int) -> int:
+        if self.exp is None:
+            raise ValueError("Exponentiation method not configured (call factory constructor first)")
+
+        if e == 1:
+            return x
+
+        # e = 2^k + 1, use addition chain approach
+        if e > 2 and is_power_of_two(e - 1):
+            return self.exp_addition_chain(x, e)
+
+        if self.cores > 0:
+            return self.parallel_exp(x, e)
+
+        return self.exp(x, e)
+
 
 class MontgomeryNumber:
     def __init__(self, value, mont: Montgomery):
@@ -810,6 +992,13 @@ class MontgomeryNumber:
     def __rsub__(self, other: int):
         return self.mont(other).__sub__(self)
 
+    def __pow__(self, exponent: int):
+
+        e = exponent if exponent > 0 else -exponent
+        t = self.mont.power(self.value, e)
+        r = MontgomeryNumber(t, self.mont)
+        return r if exponent > 0 else 1 / r
+
     def __eq__(self, other):
         if not isinstance(other, MontgomeryNumber):
             return NotImplemented
@@ -823,7 +1012,6 @@ class MontgomeryNumber:
         return self.mont.exit_domain(self.value)
 
 
-# todo> remove: quick tb
 if __name__ == '__main__':
     # region sample usage
     # M = Montgomery.factory(mod=31, mul_opt='real5').build(m=4)
