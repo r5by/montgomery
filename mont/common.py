@@ -1,6 +1,6 @@
 ## Common arithmetics
 ## @author: Luke Li<zhongwei.li@mavs.uta.edu>
-from utils import *
+from .utils import *
 
 # Convenient lambdas
 nextp2 = lambda x: 1 << (x - 1).bit_length()  # next power of 2 greater than x
@@ -79,6 +79,24 @@ COMP_TYPE = config.get('COMP_TYPE', 'seq')
 # result = booth_multiplier(multiplicand, multiplier)
 # print(f"Final product: {result}, in binary: {bin(result)}")
 #endregion
+
+def add_chain_breakdown(n, limit=3):
+    ''' Get position of '1's in binary repr. of given integer n to form the addition chain
+        Short circuit: we care no more than 3 for addition chain reduction, refer to mont [
+    '''
+    if n & 1 == 0:
+        raise ValueError(f'We care only odd numbers for ')
+
+    cnt = 0
+    while n != 0:
+        n = n & (n - 1)
+        cnt += 1
+
+        if cnt > limit:
+            return 0
+
+    return cnt
+
 
 def decompose(Z, w, m):
     ''' Z = ZM(major part) + ZR(remainder part), where ZR is the least significant (w-m) bits'''

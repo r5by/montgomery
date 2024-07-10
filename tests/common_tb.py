@@ -1,6 +1,5 @@
 import unittest
-import random
-from common import *
+from mont.common import *
 
 
 class TestCommon(unittest.TestCase):

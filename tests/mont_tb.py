@@ -1,6 +1,6 @@
 import unittest
-from src.mont import Montgomery
-from common import *
+from mont.montgomery import Montgomery
+from mont.common import *
 import os
 from random import randint
 
@@ -15,12 +15,12 @@ class TestMontgomeryOperations(unittest.TestCase):
         self.MAX_EXP = 10000  # maximum power to be tested
 
         if self.RADOMIZED:
-            filename = 'm_primes_256.data'
+            filename = '../test/m_primes_256.data'
             domains = 1  # p for Z_p :
             self.num_count = 100  # randomly generated repr. numbers in Z_p
         else:
             # fixed
-            filename = 't_primes.data'
+            filename = '../test/t_primes.data'
             domains = 1
             self.num_count = 10
 
@@ -98,7 +98,7 @@ class TestMontgomeryOperations(unittest.TestCase):
         except TimeoutException:
             print("Test case exceeded the time limit of 2 minutes.")
 
-    #region Toggle on only for small montgomery domains
+    #region Toggle on only for small mont domains
     # def test_mont_constant(self):
     #
     #     for mont in self.monts:

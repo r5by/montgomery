@@ -1,7 +1,7 @@
 ## Montgomery domain over F_p, we consider p as a prime other than an arbitrary odd number here
 # so that Montgomery domain will be a field in this case.
 # In Montgomery Field over F_p, identity is mapped to R%p specifically; and mul operation be like: a_mul_b := REDC(
-# a*b), where REDC is the montgomery reduction.
+# a*b), where REDC is the mont reduction.
 # references:
 # [1] [Montgomery inversion](https://link.springer.com/article/10.1007/s13389-017-0161-x)
 # [2] [High-Radix Design of a Scalable Montgomery Modular Multiplier With Low Latency](
@@ -9,11 +9,11 @@
 # [3] [Topics in Computational Number Theory Inspired by Peter L. Montgomery](https://www.cambridge.org/core/books/topics-in-computational-number-theory-inspired-by-peter-l-montgomery/4F7A9AE2CE219D490B7D253558CF6F00)
 # [4] [Handbook of applied cryptography]()
 # [5] [The Montgomery Powering Ladder](https://cr.yp.to/bib/2003/joye-ladder.pdf)
+# [6] [The Scholz conjecture on addition chain is true for infinitely many integers with ℓ(2n) = ℓ(n)](https://eprint.iacr.org/2023/020.pdf)
 ## @author: Luke Li<zhongwei.li@mavs.uta.edu>
 from typing import Optional, Union
-from common import *
+from .common import *
 import math
-from sim import compressor_2m4to2
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
 
@@ -370,7 +370,7 @@ class Montgomery:
         :return: u * R^{-1} mod N
         '''
         if u < 0 or u > self.R * self.N - 1:
-            raise ValueError('Given number if out of montgomery reduction range')
+            raise ValueError('Given number if out of mont reduction range')
 
         n = self.R.bit_length() - 1
         k = u * self.N_ & self.__RMASK
@@ -419,7 +419,7 @@ class Montgomery:
         return self.N - r, k
 
     def __cor_phase_mont(self, r, k):
-        '''corretion phase of montgomery inverse
+        '''corretion phase of mont inverse
         ref:  [1] Alg. 5
         '''
         n, p = self.R.bit_length() - 1, self.N
@@ -434,7 +434,7 @@ class Montgomery:
         return r
 
     def __cor_phase_fb(self, r, k):
-        '''corretion phase of forward/backward montgomery inversion
+        '''corretion phase of forward/backward mont inversion
         ref:  [1] Alg. 5
         '''
         n, p = self.R.bit_length() - 1, self.N
@@ -451,7 +451,7 @@ class Montgomery:
 
     def _mont_inv(self, a):
         '''
-            Calc. the montgomery inverse of a modulo p
+            Calc. the mont inverse of a modulo p
             ref:
         :param a: given number in Montgomery representation
         :param R: R = 2^{Wt} >= 2^n, where p < 2^n
@@ -838,7 +838,7 @@ class Montgomery:
 
     def exp_mont_ladder_safe(self, x: int, e: int) -> int:
         '''
-            A side-channel and M safe-error protected version of montgomery ladder
+            A side-channel and M safe-error protected version of mont ladder
             ref: [5] Fig. 9.
         '''
 
@@ -864,7 +864,7 @@ class Montgomery:
     def exp_addition_chain(self, x: int, e: int) -> int:
         '''
             (shortest) Addition chain of n is denoted by l(n), it can be proved:
-            l(2^{k+1} + 1) = l(2^k).append(2^k + 1)
+            chain(2^{k+1} + 1) = chain(2^k).append(2^k + 1)
         :param x: base from any Abelian group
         :param e: exponent that is power of 2 + 1
         :return: x**e
@@ -935,7 +935,7 @@ class MontgomeryNumber:
         elif isinstance(other, int):
             # other = self.mont(other)
             # !! Decision choice !!
-            # i * mont(a) should treat i as-is the montgomery repr other than converting it automatically!!
+            # i * mont(a) should treat i as-is the mont repr other than converting it automatically!!
             other = MontgomeryNumber(value=other, mont=self.mont)
             return self.__mul__(other)
         return NotImplemented

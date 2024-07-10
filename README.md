@@ -2,7 +2,10 @@
 
 ## Overview
 
-The "Montgomery" project offers a comprehensive library for performing arithmetic operations within the Montgomery domain, particularly over a prime field. This project aims to support efficient hardware (HW) implementations of these operations, which include addition, subtraction, multiplication, division, and inversion. The focus is on educational purposes and illustration, and it is **not intended for use in production environments under any circumstances**.
+The "Montgomery" project offers a comprehensive library for performing arithmetic operations within the Montgomery 
+domain, particularly over a prime field. This project aims to support efficient hardware (HW) implementations of 
+these operations, which include addition, subtraction, multiplication, division, inversion and exponentiation. The 
+focus is on educational purposes and illustration, and it is **not intended for use in production environments under any circumstances**.
 
 
 ## Montgomery Domain
@@ -27,8 +30,12 @@ A number `x` in the conventional representation is transformed into the Montgome
 
 ```bash
 git clone https://github.com/r5by/montgomery.git
-cd montgomery
+cd mont
 pip install -r requirements.txt
+
+# use this lib from other project
+cd mont
+pip install -e .
 ```
 
 ## Example Usage
@@ -46,6 +53,8 @@ b = x - y
 c = x * y
 d = 1 / x
 e = x / y
+f = x ** e
+g = y ** 65537
 
 # exit the Montomery domain
 _x, _y = int(x), int(y)
@@ -72,4 +81,8 @@ covered.
 1. [Montgomery inversion](https://link.springer.com/article/10.1007/s13389-017-0161-x)
 2. [High-Radix Design of a Scalable Montgomery Modular Multiplier With Low Latency](https://ieeexplore.ieee.org/abstract/document/9328560)
 3. [Topics in Computational Number Theory Inspired by Peter L. Montgomery](https://www.cambridge.org/core/books/topics-in-computational-number-theory-inspired-by-peter-l-montgomery/4F7A9AE2CE219D490B7D253558CF6F00)
+4. [Handbook of applied cryptography]()
+5. [The Montgomery Powering Ladder](https://cr.yp.to/bib/2003/joye-ladder.pdf)
+6. [The Scholz conjecture on addition chain is true for infinitely many integers with ℓ(2n) = ℓ(n)](https://eprint.iacr.org/2023/020.pdf)
+
 
