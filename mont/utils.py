@@ -7,6 +7,7 @@ from functools import reduce
 from operator import mul
 import random
 import json
+import os
 import signal
 from contextlib import contextmanager
 
@@ -105,8 +106,42 @@ def bi_factor(n):
 
 
 def load_config():
-    with open('../config.json', 'r') as file:
-        return json.load(file)
+    default_config = {
+        "COMP_TYPE": "ter",
+        "DEFAULT_MUL_OPT": "real8",
+        "DEFAULT_EXP_OPT": "mont-ladder-safe",
+        "TOTAL_CORES": 6
+    }
+    config_filename = 'config.json'
+
+    # Determine the script directory (assumed to be the project root)
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    project_root_path = os.path.join(script_directory, '..', )
+    project_root_config_path = os.path.join(project_root_path, config_filename)
+
+    # Paths to check for the config file
+    paths_to_check = [
+        os.path.join(os.getcwd(), config_filename),  # Current Working Directory
+        os.path.normpath(project_root_config_path)  # Project Root Directory
+    ]
+
+    # Check each path for the config file
+    for path in paths_to_check:
+        if os.path.exists(path):
+            with open(path, 'r') as file:
+                return json.load(file)
+
+    # 2. Check if the environment variable MONTGOMERY_CONFIG_PATH is set and file exists
+    env_config_path = os.getenv('MONTGOMERY_CONFIG_PATH')
+    if env_config_path:
+        if os.path.exists(env_config_path):
+            with open(env_config_path, 'r') as file:
+                return json.load(file)
+
+    # 3. If no configuration found, create a default config.json in the current working directory
+    with open(os.path.join(os.getcwd(), config_filename), 'w') as file:
+        json.dump(default_config, file, indent=4)
+    return default_config
 
 
 class TimeoutException(Exception):
