@@ -1,6 +1,6 @@
 ## Common arithmetics
 ## @author: Luke Li<zhongwei.li@mavs.uta.edu>
-from .utils import *
+from mont.utils import *
 
 # Convenient lambdas
 nextp2 = lambda x: 1 << (x - 1).bit_length()  # next power of 2 greater than x

@@ -12,7 +12,7 @@
 # [6] [The Scholz conjecture on addition chain is true for infinitely many integers with ℓ(2n) = ℓ(n)](https://eprint.iacr.org/2023/020.pdf)
 ## @author: Luke Li<zhongwei.li@mavs.uta.edu>
 from typing import Optional, Union
-from .common import *
+from mont.common import *
 import math
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
