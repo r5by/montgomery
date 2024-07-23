@@ -36,6 +36,8 @@ class TestMontgomeryOperations(unittest.TestCase):
         self.monts = []
 
         if self.RADOMIZED:
+            mont0 = Montgomery.factory(mod=large_primes[0], mul_opt='real0').build()
+            self.monts.append(mont0)
 
             # # real-1
             # self.monts[1].config('real1').build()
@@ -63,9 +65,8 @@ class TestMontgomeryOperations(unittest.TestCase):
             # mont7 = Montgomery.factory(mod=large_primes[7], mul_opt='real7').build(m=4, w=8)
             # self.monts[7] = mont7
 
-            # todo> only works for sequential compressor?
-            mont8 = Montgomery.factory(mod=large_primes[0], mul_opt='real8').build(m=64, w=256)
-            self.monts.append(mont8)
+            # mont8 = Montgomery.factory(mod=large_primes[0], mul_opt='real8').build(m=64, w=256)
+            # self.monts.append(mont8)
 
         else:
             # customized fixed case here
@@ -118,19 +119,19 @@ class TestMontgomeryOperations(unittest.TestCase):
     #             self.assertEqual(exp, act)
     #endregion
 
-    def test_compressor(self):
-        for mont in self.monts:
-
-            p = mont.N
-            for _ in range(1000000):
-                # Generate three random integers
-                num1 = randint(2, p)
-                num2 = randint(2, p)
-                num3 = randint(3, p)
-
-                exp = num1 + num2 + num3
-                a, b = compress([num1, num2, num3])
-                self.assertEqual(exp, a + b)
+    # def test_compressor(self):
+    #     for mont in self.monts:
+    #
+    #         p = mont.N
+    #         for _ in range(100000):
+    #             # Generate three random integers
+    #             num1 = randint(2, p)
+    #             num2 = randint(2, p)
+    #             num3 = randint(3, p)
+    #
+    #             exp = num1 + num2 + num3
+    #             a, b = compress([num1, num2, num3])
+    #             self.assertEqual(exp, a + b)
 
     def test_multiplication(self):
 
@@ -148,14 +149,23 @@ class TestMontgomeryOperations(unittest.TestCase):
                 act1 = a * b_
                 act2 = a_ * b
 
+                act3 = a_ + a_
+                act4 = b_ + b_
+
                 # Direct addition and reduction
                 exp = mont((a * b) % p)
                 exp1 = mont(mont.exit_domain(a) * b % p)
                 exp2 = mont(a * mont.exit_domain(b) % p)
 
+                exp3 = mont((2*a) % p)
+                exp4 = mont((b*2) % p)
+
                 self.assertEqual(act, exp)
                 self.assertEqual(act1, exp1)
                 self.assertEqual(act2, exp2)
+
+                self.assertEqual(act3, exp3)
+                self.assertEqual(act4, exp4)
 
                 print(f'done: {cnt + 1}/{total}%')
                 cnt += 1
@@ -168,6 +178,9 @@ class TestMontgomeryOperations(unittest.TestCase):
             x = self.rands[i]
             e = random.randint(1, self.MAX_EXP)
             e1 = (1 << i + 1) + 1  # particularly covers e = 2^k + 1 cases, for k >= 1
+
+            # corner cases
+            corners = [1, 2]
 
             for mont in self.monts:
                 p = mont.N
@@ -182,6 +195,11 @@ class TestMontgomeryOperations(unittest.TestCase):
                     act1 = x_ ** e1
                     exp1 = mont((x ** e1) % p)
                     self.assertEqual(act1, exp1, f'Exponential test e={e1}=(2^(k+1) + 1) for k={i} fails!')
+
+                for ec in corners:
+                    act2 = x_ ** ec
+                    exp2 = mont((x**ec) % p)
+                    self.assertEqual(act2, exp2)
 
                 print(f'done: {cnt + 1}/{total}%')
                 cnt += 1

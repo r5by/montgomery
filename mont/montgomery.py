@@ -11,11 +11,13 @@
 # [5] [The Montgomery Powering Ladder](https://cr.yp.to/bib/2003/joye-ladder.pdf)
 # [6] [The Scholz conjecture on addition chain is true for infinitely many integers with ℓ(2n) = ℓ(n)](https://eprint.iacr.org/2023/020.pdf)
 ## @author: Luke Li<zhongwei.li@mavs.uta.edu>
+from abc import ABC
 from typing import Optional, Union
 from mont.common import *
 import math
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
+from mont.typing import GFElementType, GFType
 
 # Pre-config
 DEFAULT_MUL_OPT = config.get('DEFAULT_MUL_OPT', 'real1')
@@ -23,7 +25,7 @@ DEFAULT_EXP_OPT = config.get('DEFAULT_EXP_OPT', 'exp1')
 CORES = config.get('TOTAL_CORES', 0)  # available cores for parallel processing (for exp usage)
 
 
-class Montgomery:
+class Montgomery(GFType):
     def __init__(self):
 
         self._N: Optional[int] = None  # modulo, stated as "M" in [2]
@@ -31,6 +33,7 @@ class Montgomery:
         self.__n: Optional[int] = None  # 2 ** __n > modulo, stated as "N" in [2]
         self._R: Optional[int] = None  # R > N and is a power of 2 (the smallest power of 2 greater than N by default)
         self.__RMASK: Optional[int] = None  # (&__RMASK) substitutes for (%R) operation
+        self._R_inv: Optional[int] = None  # R*R_inv + N*N_ = 1
 
         self.__m: Optional[int] = None
         self.__r: Optional[int] = None  # r = 2**m, radix.
@@ -55,8 +58,9 @@ class Montgomery:
     @classmethod
     def factory(cls, mod: int, mul_opt: str = DEFAULT_MUL_OPT, exp_opt: str = DEFAULT_EXP_OPT) -> 'Montgomery':
         if not mod & 1:
-            raise ValueError("The modulus must be an odd number (prime actually).")  # todo> primality test here
-            # probably?
+            raise ValueError("The modulus must be an odd number (prime actually).")  # todo> primality test?
+        if mod <= 3:
+            raise ValueError(f'Characteristic 2 or 3 modula is not supported, current mod={mod}')
 
         inst = cls()
         inst.N = mod
@@ -208,6 +212,10 @@ class Montgomery:
         self.R = 1 << self.n
         self.m = self.n  # auto: r = 2**m
 
+        if self.mul_opt == 'real0':  # dummy multiplication used as base
+            self.__pre_calc_0()
+            return self
+
         if self.mul_opt != 'real1' and not kwargs:
             raise ValueError(f'For multiplication realizations other than the default, current: {self.mul_opt}, '
                              f'requires more input arguments.')
@@ -285,7 +293,20 @@ class Montgomery:
         self.ONE, self.R2 = self.__pre_calc_R2()  # R % N and R**2 % N
         self.N_ = self.__pre_calc_N_()  # N' for rr'-NN'=1
 
+    def __pre_calc_0(self):
+        # used for dummy real0 base case only
+        _R, _, _ = xgcd(self.R, self.N)
+        self._R_inv = _R
+        self.ONE = self.R % self.N
+        self.R2 = self.R * self.ONE % self.N
+
     def enter_domain(self, a):
+        if a == 1:
+            return self.ONE
+
+        if self.mul_opt == 'real0':  # dummy base
+            return a * self.R % self.N
+
         return self.multiply(a, self.R2)
 
     def exit_domain(self, a):
@@ -325,7 +346,9 @@ class Montgomery:
 
         if mul_opt is not None and mul_opt != self.mul_opt:
             self.mul_opt = mul_opt
-            if mul_opt == 'real1':
+            if mul_opt == 'real0':
+                self.mul = self.real0
+            elif mul_opt == 'real1':
                 self.mul = self.real1_FPR2tN
             elif mul_opt == 'real2':
                 self.mul = self.real2_FPR2t1
@@ -461,6 +484,10 @@ class Montgomery:
         t, k = self.__alm_inv(a)
         r = self.__cor_phase_mont(t, k)
         return r
+
+    def real0(self, a: int, b: int) -> int:
+        '''Dummy base multiplication, used for quick verification'''
+        return (a * b * self._R_inv) % self.N
 
     def real1_FPR2tN(self, a: int, b: int) -> int:
         return self.REDC(a * b)
@@ -776,9 +803,9 @@ class Montgomery:
         t = e.bit_length() - 1
 
         for i in range(t, -1, -1):
-            A = self.multiply(A, A)
+            A = self.mul(A, A)
             if (e >> i) & 1:
-                A = self.multiply(x, A)
+                A = self.mul(x, A)
 
         return A
 
@@ -790,8 +817,8 @@ class Montgomery:
         t = e.bit_length() - 1
 
         for i in range(t, -1, -1):
-            A = self.multiply(A, A)
-            Ax = self.multiply(x, A)
+            A = self.mul(A, A)
+            Ax = self.mul(x, A)
             A = Ax if (e >> i) & 1 else A
 
         return A
@@ -805,11 +832,11 @@ class Montgomery:
 
         for i in range(t, -1, -1):
             if (e >> i) & 1:
-                r0 = self.multiply(r0, r1)
-                r1 = self.multiply(r1, r1)
+                r0 = self.mul(r0, r1)
+                r1 = self.mul(r1, r1)
             else:
-                r1 = self.multiply(r0, r1)
-                r0 = self.multiply(r0, r0)
+                r1 = self.mul(r0, r1)
+                r0 = self.mul(r0, r0)
 
         return r0
 
@@ -827,8 +854,8 @@ class Montgomery:
 
                 # Simulate two processors compute intermediate results in parallel
                 futures = {}
-                futures[~b] = executor.submit(self.multiply, R[0], R[1])
-                futures[b] = executor.submit(self.multiply, R[b], R[b])
+                futures[~b] = executor.submit(self.mul, R[0], R[1])
+                futures[b] = executor.submit(self.mul, R[b], R[b])
 
                 # Retrieve results
                 R[~b] = futures[~b].result()
@@ -852,8 +879,8 @@ class Montgomery:
 
                 # Simulate two processors compute intermediate results in parallel
                 futures = {}
-                futures[b] = executor.submit(self.multiply, R[b], R[kj])
-                futures[kj] = executor.submit(self.multiply, R[kj], R[kj])
+                futures[b] = executor.submit(self.mul, R[b], R[kj])
+                futures[kj] = executor.submit(self.mul, R[kj], R[kj])
 
                 # Retrieve results
                 R[b] = futures[b].result()
@@ -872,10 +899,10 @@ class Montgomery:
         k = (e - 1).bit_length() - 2
         r = x
         for _ in range(k):
-            r = self.multiply(r, r)
+            r = self.mul(r, r)
 
-        t = self.multiply(r, x)  # t = g**{k + 1}
-        return self.multiply(r, t)
+        t = self.mul(r, x)  # t = g**{k + 1}
+        return self.mul(r, t)
 
     def _compute_ai(self, g, ei, r):
         '''
@@ -923,7 +950,7 @@ class Montgomery:
         return self.exp(x, e)
 
 
-class MontgomeryNumber:
+class MontgomeryNumber(GFElementType, ABC):
     def __init__(self, value, mont: Montgomery):
         self.mont = mont
         self.value = value if value < mont.N else value % mont.N
@@ -992,6 +1019,9 @@ class MontgomeryNumber:
     def __rsub__(self, other: int):
         return self.mont(other).__sub__(self)
 
+    def __neg__(self):
+        return MontgomeryNumber(self.mont.N - self.value, self.mont)
+
     def __pow__(self, exponent: int):
 
         e = exponent if exponent > 0 else -exponent
@@ -1000,9 +1030,13 @@ class MontgomeryNumber:
         return r if exponent > 0 else 1 / r
 
     def __eq__(self, other):
-        if not isinstance(other, MontgomeryNumber):
-            return NotImplemented
-        return self.value == other.value and self.mont.N == other.mont.N
+        if isinstance(other, int):
+            return self.value == other  # a convenient verification of its value only
+
+        if isinstance(other, MontgomeryNumber):
+            return self.value == other.value and self.mont.N == other.mont.N
+
+        return NotImplemented
 
     def __repr__(self):
         return f"{self.value} (mod {self.mont.N})"
@@ -1015,10 +1049,13 @@ class MontgomeryNumber:
 if __name__ == '__main__':
     # region sample usage
     # M = Montgomery.factory(mod=31, mul_opt='real5').build(m=4)
-    p = 61
+    p = 29
     # M = Montgomery.factory(mod=p, mul_opt='real3').build(w=8)
 
-    M = Montgomery.factory(mod=p, mul_opt='real8').build(m=2, w=5)
+    M = Montgomery.factory(mod=p, mul_opt='real8').build(m=64, w=256)
+    a, b = 2, 20
+    _a, _b = M(a), M(b)
+
     # M = Montgomery.factory(mod=p, mul_opt='real7').build(m=2, w=5)
     # M = Montgomery.factory(mod=p, mul_opt='real6').build(m=2, w=5)
     x = 46

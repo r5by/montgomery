@@ -29,12 +29,15 @@ def profiler(num_runs=100, enabled=True):
             total_time = 0
             for _ in range(num_runs):
                 start_time = time.time()
-                func(*args, **kwargs)
+                result = func(*args, **kwargs)  # Store the function's return to use it later
                 end_time = time.time()
                 total_time += (end_time - start_time)
             average_time = total_time / num_runs
-            print(f"Average execution time for {func.__name__}: {average_time} seconds")
-            return func(*args, **kwargs)
+
+            # Print the profiling result after the function's prints
+            print(f"\nAverage execution time for {func.__name__}: {average_time} seconds")
+
+            return result  # Return the original function's result
 
         return wrapper
 
