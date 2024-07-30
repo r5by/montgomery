@@ -2,6 +2,9 @@ from abc import ABC, abstractmethod
 
 
 class GFType(ABC):
+
+    def __init__(self, order):
+        self.order = order
     @abstractmethod
     def __call__(self, value) -> 'GFElementType':
         """ Converts value into this field"""

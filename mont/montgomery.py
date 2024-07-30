@@ -27,7 +27,7 @@ CORES = config.get('TOTAL_CORES', 0)  # available cores for parallel processing 
 
 class Montgomery(GFType):
     def __init__(self):
-
+        super().__init__(None)
         self._N: Optional[int] = None  # modulo, stated as "M" in [2]
 
         self.__n: Optional[int] = None  # 2 ** __n > modulo, stated as "N" in [2]
@@ -77,6 +77,7 @@ class Montgomery(GFType):
         if not value & 1:
             raise ValueError("The modulus must be an odd number.")  # todo> primality test here probably?
         self._N = value
+        super().__init__(value) # set up the order
 
     @property
     def R(self):
