@@ -55,6 +55,16 @@ class Montgomery(GFType):
         self.p: Optional[int] = None  # real-8 specific: PE count
         self.k: Optional[int] = None  # real-8 specific
 
+    def __repr__(self):
+        # Convert N to a string to count digits and possibly truncate
+        N_str = str(self.N)
+        if len(N_str) < 10:
+            formatted_N = N_str
+        else:
+            formatted_N = f'{N_str[:4]}..{N_str[-4:]}'
+
+        return f'Montgomery domain mod {formatted_N} over R=2^{self.__n}.'
+
     @classmethod
     def factory(cls, mod: int, mul_opt: str = DEFAULT_MUL_OPT, exp_opt: str = DEFAULT_EXP_OPT) -> 'Montgomery':
         if not mod & 1:
@@ -127,23 +137,39 @@ class Montgomery(GFType):
     def w(self, value):
         self._w = value
 
+    def update_kv(self, key: str, value: int):
+        if key == 'R':
+            self.R = value
+            self.n = value.bit_length() - 1
+        elif key == 'n':
+            self.n = value
+            self.R = 1 << value
+        elif key == 'w':
+            self.w = value
+        elif key == 'm':
+            self.m = value
+        elif key == 'r':
+            self.r = value
+        else:
+            raise RuntimeError(f'Unknown key={key}, value={value}!')
+
     def parse_args(self, **kwargs: Union[int, str]):
 
+        # filtering k,v pair by mul_opt
         for key, value in kwargs.items():
-            if (self.mul_opt == 'real1'
+
+            if self.mul_opt == 'real0':
+
+                if key != 'R' and key != 'n':
+                    continue
+
+            elif (self.mul_opt == 'real1'
                     or self.mul_opt == 'real2'):
                 if 'R' not in kwargs and 'n' not in kwargs:
                     raise ValueError(f'R (or its power) must be specified for realization 1 or 2.')
 
                 if key != 'R' and key != 'n':
                     continue
-
-                if key == "R":
-                    self.R = value
-                    self.n = value.bit_length() - 1
-                elif key == "n":
-                    self.n = value
-                    self.R = 1 << value
 
             elif self.mul_opt == 'real3':
                 if 'w' not in kwargs:
@@ -152,8 +178,6 @@ class Montgomery(GFType):
                 if key != 'w':
                     continue
 
-                self.w = value
-
             elif self.mul_opt == 'real4':
                 if 'm' not in kwargs and 'r' not in kwargs:
                     raise ValueError(f' Radix r=2**m must be specified for realization 4 ')
@@ -161,27 +185,11 @@ class Montgomery(GFType):
                 if key != 'm' and key != 'r':
                     continue
 
-                # setup radix r=2**m
-                if key == "r":
-                    self.r = value
-                elif key == "m":
-                    self.m = value
-
             elif (self.mul_opt == 'real5'
                   or self.mul_opt == 'real6'
                   or self.mul_opt == 'real7'):
                 if 'm' not in kwargs and 'r' not in kwargs:
                     raise ValueError(f' Radix r=2**m must be specified for realization: {self.mul_opt}')
-
-                # setup radix r=2**m
-                if key == "r":
-                    self.r = value
-                elif key == "m":
-                    self.m = value
-
-                if key == "w":
-                    self.w = value
-
             elif self.mul_opt == 'real8':
                 if 'm' not in kwargs and 'r' not in kwargs:
                     raise ValueError(f' Radix r=2**m must be specified for realization: {self.mul_opt}')
@@ -189,22 +197,63 @@ class Montgomery(GFType):
                 if 'w' not in kwargs:
                     raise ValueError(f'Word length (in bits) must be specified in realization 8.')
 
-                # set-up radix r=2**m
-                if key == "r":
-                    self.r = value
-                elif key == "m":
-                    self.m = value
-
-                # setup word length
-                if key == 'w':
-                    self.w = value
-
-                # setup PE count, use ideal value only
-                # if key == 'p':
-                #     self.p = value
-
             else:
                 raise ValueError(f'Unsupported realization!')
+
+            # handle k,v pair: update properties by valid parameters
+            self.update_kv(key, value)
+
+    def config(self, mul_opt=None, exp_opt=None):
+
+        if mul_opt is not None and mul_opt != self.mul_opt:
+            self.mul_opt = mul_opt
+            if mul_opt == 'real0':
+                self.mul = self.real0
+
+                # save R from the previous conf, this can be viewed as a fast approach in verify SW impl. on diff.
+                # mul options.
+                # Usage:
+                #   M8 = Montgomery.factory(mod=p, mul_opt='real8').build(m=64, w=256)
+                #   M8 = M8.config(mul_opt='real0')   # <== now M8 works fast on SW aspect, but still follows the same
+                #   arithmetics defined in the previous mont domain
+                if self.R:
+                    self.__pre_calc_0()
+            elif mul_opt == 'real1':
+                self.mul = self.real1_FPR2tN
+            elif mul_opt == 'real2':
+                self.mul = self.real2_FPR2t1
+            elif mul_opt == 'real3':
+                self.mul = self.real3_MWR2t1
+            elif mul_opt == 'real4':
+                self.mul = self.real4_FPR2tm
+            elif mul_opt == 'real5':
+                self.mul = self.real5_FPR2tm_v1
+            elif mul_opt == 'real6':
+                self.mul = self.real6_FPR2tm_v2
+            elif mul_opt == 'real7':
+                self.mul = self.real7_FPR2tm_v3
+            elif mul_opt == 'real8':
+                self.mul = self.real8_MWR2tm
+            else:
+                raise ValueError("Unsupported configuration mode for multiplication.")
+
+        # Check and update exponentiation option if provided and different
+        if exp_opt is not None and exp_opt != self.exp_opt:
+            self.exp_opt = exp_opt
+            if exp_opt == 'bin':
+                self.exp = self.exp_bin
+            elif exp_opt == 'bin-safe':
+                self.exp = self.exp_bin_safe
+            elif exp_opt == 'mont-ladder':
+                self.exp = self.exp_mont_ladder
+            elif exp_opt == 'mont-ladder-parallel':
+                self.exp = self.exp_mont_ladder_parallel
+            elif exp_opt == 'mont-ladder-safe':
+                self.exp = self.exp_mont_ladder_safe
+            else:
+                raise ValueError("Unsupported configuration mode for exponentiation.")
+
+        return self
 
     def build(self, **kwargs: Union[int, str]) -> 'Montgomery':
 
@@ -213,6 +262,9 @@ class Montgomery(GFType):
         self.R = 1 << self.n
         self.m = self.n  # auto: r = 2**m
 
+        # Update default properties by input arguments
+        self.parse_args(**kwargs)
+
         if self.mul_opt == 'real0':  # dummy multiplication used as base
             self.__pre_calc_0()
             return self
@@ -220,8 +272,6 @@ class Montgomery(GFType):
         if self.mul_opt != 'real1' and not kwargs:
             raise ValueError(f'For multiplication realizations other than the default, current: {self.mul_opt}, '
                              f'requires more input arguments.')
-
-        self.parse_args(**kwargs)
 
         if (self.mul_opt == 'real1'
                 or self.mul_opt == 'real2'):
@@ -342,49 +392,6 @@ class Montgomery(GFType):
             y += (1 << i - 1)
 
         return (1 << w) - y  # r - y
-
-    def config(self, mul_opt=None, exp_opt=None):
-
-        if mul_opt is not None and mul_opt != self.mul_opt:
-            self.mul_opt = mul_opt
-            if mul_opt == 'real0':
-                self.mul = self.real0
-            elif mul_opt == 'real1':
-                self.mul = self.real1_FPR2tN
-            elif mul_opt == 'real2':
-                self.mul = self.real2_FPR2t1
-            elif mul_opt == 'real3':
-                self.mul = self.real3_MWR2t1
-            elif mul_opt == 'real4':
-                self.mul = self.real4_FPR2tm
-            elif mul_opt == 'real5':
-                self.mul = self.real5_FPR2tm_v1
-            elif mul_opt == 'real6':
-                self.mul = self.real6_FPR2tm_v2
-            elif mul_opt == 'real7':
-                self.mul = self.real7_FPR2tm_v3
-            elif mul_opt == 'real8':
-                self.mul = self.real8_MWR2tm
-            else:
-                raise ValueError("Unsupported configuration mode for multiplication.")
-
-        # Check and update exponentiation option if provided and different
-        if exp_opt is not None and exp_opt != self.exp_opt:
-            self.exp_opt = exp_opt
-            if exp_opt == 'bin':
-                self.exp = self.exp_bin
-            elif exp_opt == 'bin-safe':
-                self.exp = self.exp_bin_safe
-            elif exp_opt == 'mont-ladder':
-                self.exp = self.exp_mont_ladder
-            elif exp_opt == 'mont-ladder-parallel':
-                self.exp = self.exp_mont_ladder_parallel
-            elif exp_opt == 'mont-ladder-safe':
-                self.exp = self.exp_mont_ladder_safe
-            else:
-                raise ValueError("Unsupported configuration mode for exponentiation.")
-
-        return self
 
     def REDC(self, u):
         '''

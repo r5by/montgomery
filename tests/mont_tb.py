@@ -1,89 +1,92 @@
 import unittest
+
 from mont.montgomery import Montgomery
 from mont.common import *
 import os
-from random import randint
 
-
-# Up-to data: 6/16/2024, real-8 tests is failed
 
 class TestMontgomeryOperations(unittest.TestCase):
     def setUp(self):
-
+        self.FULL_TEST = False  # run all test cases? caution for large prime domains!!
         self.RADOMIZED = 1
-        num_primes = 1  # num of primes >= num of domains; change this shall delete the data file to regenerate primes
+
+        # NOTE: change this number should delete the m_primes_xxx.data first.
+        num_primes = 10  # num of primes >= num of domains; change this shall delete the data file to regenerate primes
+
         self.MAX_EXP = 10000  # maximum power to be tested
 
         if self.RADOMIZED:
-            filename = '../test/m_primes_256.data'
-            domains = 1  # p for Z_p :
-            self.num_count = 100  # randomly generated repr. numbers in Z_p
+            filename = './m_primes_256.data'
+            self.num_count = 3  # randomly generated repr. numbers in Z_p
         else:
             # fixed
-            filename = '../test/t_primes.data'
-            domains = 1
+            filename = './t_primes.data'
             self.num_count = 10
 
         if not os.path.exists(filename):
             # Generate prime numbers
             large_primes = generate_large_primes(num_primes, 256)
-            save_to_file(large_primes)
+            save_to_file(large_primes, filename=filename)
         else:
             large_primes = load_primes_from_file(filename)
 
         self.rands = random_list(low=2, high=max(large_primes), count=self.num_count)
-        # self.monts = [Montgomery.factory(mod=large_primes[i]).build() for i in range(domains)]
         self.monts = []
+        mont0 = Montgomery.factory(mod=large_primes[0], mul_opt='real0').build()
+        self.monts.append(mont0)
 
         if self.RADOMIZED:
-            mont0 = Montgomery.factory(mod=large_primes[0], mul_opt='real0').build()
-            self.monts.append(mont0)
+            # real-1
+            mont1 = Montgomery.factory(mod=large_primes[1], mul_opt='real1').build()
+            self.monts.append(mont1)
 
-            # # real-1
-            # self.monts[1].config('real1').build()
-            #
-            # # real-2
-            # # self.monts[2].config('real2').build(R=1 << nextp2(self.monts[2].N).bit_length() + 2)
-            # self.monts[2].config('real2').build(n=nextp2(self.monts[2].N).bit_length() + 2)
-            #
-            # # real-3
-            # mont3 = Montgomery.factory(mod=large_primes[3], mul_opt='real3').build(w=5)
+            # real-2
+            mont2 = Montgomery.factory(mod=large_primes[2]).build()
+            mont2.config(mul_opt='real2').build(n=nextp2(mont2.N).bit_length() + 2)
+            self.monts.append(mont2)
+
+            # real-3
+            mont3 = Montgomery.factory(mod=large_primes[3], mul_opt='real3').build(w=5)
             # self.monts[3] = mont3
-            #
-            # # real-4
-            # mont4 = Montgomery.factory(mod=large_primes[4], mul_opt='real4').build(m=4)
-            # self.monts[4] = mont4
-            #
-            # # real-5
-            # mont5 = Montgomery.factory(mod=large_primes[5], mul_opt='real5').build(m=5)
-            # self.monts[5] = mont5
-            #
-            # # real-6
-            # mont6 = Montgomery.factory(mod=large_primes[6], mul_opt='real6').build(m=6)
-            # self.monts[6] = mont6
-            #
-            # mont7 = Montgomery.factory(mod=large_primes[7], mul_opt='real7').build(m=4, w=8)
-            # self.monts[7] = mont7
+            self.monts.append(mont3)
 
-            # mont8 = Montgomery.factory(mod=large_primes[0], mul_opt='real8').build(m=64, w=256)
-            # self.monts.append(mont8)
+            # real-4
+            mont4 = Montgomery.factory(mod=large_primes[4], mul_opt='real4').build(m=4)
+            self.monts.append(mont4)
+
+            # real-5
+            mont5 = Montgomery.factory(mod=large_primes[5], mul_opt='real5').build(m=5)
+            self.monts.append(mont5)
+
+            # real-6
+            mont6 = Montgomery.factory(mod=large_primes[6], mul_opt='real6').build(m=6)
+            self.monts.append(mont6)
+
+            mont7 = Montgomery.factory(mod=large_primes[7], mul_opt='real7').build(m=4, w=8)
+            self.monts.append(mont7)
+
+            mont8 = Montgomery.factory(mod=large_primes[0], mul_opt='real8').build(m=64, w=256)
+            self.monts.append(mont8)
 
         else:
             # customized fixed case here
             self.monts[0].config(mul_opt='real8').build(m=2, w=5)
 
+
     def test_domain(self):
 
-        _FULL_TEST = False
+        _FULL_TEST = self.FULL_TEST
         try:
-            with timeout(120):  # 120 seconds or 2 minutes
+            with timeout(120):  # 2 minutes
+
+                cnt = 0
+                total = sum(mont.N for mont in self.monts) if _FULL_TEST else self.num_count * len(self.monts)
                 for mont in self.monts:
                     # verify pre-calc
                     R2_exp = (mont.R % mont.N) ** 2 % mont.N
                     self.assertEqual(R2_exp, mont.R2)
 
-                    # cnt, total = 0, self.num_count if self.RADOMIZED else mont.N
-                    cnt, total = 0, mont.N if _FULL_TEST else self.num_count
+
                     draws = range(mont.N) if _FULL_TEST else self.rands
                     # verify enter/exit domain
                     for x in draws:
@@ -94,7 +97,7 @@ class TestMontgomeryOperations(unittest.TestCase):
                         x_ = int(x_mont)
                         self.assertEqual(x % mont.N, x_)
 
-                        print(f'done: {cnt + 1}/{total}%')
+                        print(f'{cnt + 1}/{total}% : Test domain on {mont} succeeded!')
                         cnt += 1
         except TimeoutException:
             print("Test case exceeded the time limit of 2 minutes.")
@@ -135,7 +138,7 @@ class TestMontgomeryOperations(unittest.TestCase):
 
     def test_multiplication(self):
 
-        cnt, total = 0, self.num_count - 1
+        cnt, total = 0, (self.num_count - 1) * len(self.monts)
         for i in range(self.num_count - 1):
 
             a, b = self.rands[i], self.rands[i + 1]
@@ -167,13 +170,15 @@ class TestMontgomeryOperations(unittest.TestCase):
                 self.assertEqual(act3, exp3)
                 self.assertEqual(act4, exp4)
 
-                print(f'done: {cnt + 1}/{total}%')
+                print(f'{cnt + 1}/{total}% : Test multiplication on {mont} succeeded!')
                 cnt += 1
 
     def test_exponentiation(self):
+        _FULL_TEST = self.FULL_TEST
 
-        cnt, total = 0, self.num_count
-        for i in range(self.num_count):
+        test_per_mont = self.num_count if _FULL_TEST else 1
+        cnt, total = 0, test_per_mont * len(self.monts)
+        for i in range(test_per_mont):
 
             x = self.rands[i]
             e = random.randint(1, self.MAX_EXP)
@@ -201,7 +206,7 @@ class TestMontgomeryOperations(unittest.TestCase):
                     exp2 = mont((x**ec) % p)
                     self.assertEqual(act2, exp2)
 
-                print(f'done: {cnt + 1}/{total}%')
+                print(f'{cnt + 1}/{total}% : Test exponentiation on {mont} succeeded!')
                 cnt += 1
 
     def test_addition(self):
@@ -223,6 +228,7 @@ class TestMontgomeryOperations(unittest.TestCase):
                 self.assertEqual(act, exp)
                 self.assertEqual(act1, exp1)
                 self.assertEqual(act2, exp2)
+        print(f'Test additions all succeeded!')
 
     def test_subtraction(self):
         for i in range(self.num_count - 1):
@@ -241,6 +247,8 @@ class TestMontgomeryOperations(unittest.TestCase):
                 self.assertEqual(act1, exp)
                 self.assertEqual(act2, exp)
 
+        print(f'Test subtraction all succeeded!')
+
     def test_almost_inversion(self):
 
         for mont in self.monts:
@@ -251,6 +259,8 @@ class TestMontgomeryOperations(unittest.TestCase):
                 act, k = mont._Montgomery__alm_inv(a)
                 exp = a_ * (1 << k) % p
                 self.assertEqual(act, exp)
+
+        print(f'Test (almost) inversion all succeeded!')
 
     def test_inversion(self):
 
@@ -266,6 +276,8 @@ class TestMontgomeryOperations(unittest.TestCase):
 
                 self.assertEqual(exp, act)
                 self.assertEqual(exp, act1)
+
+        print(f'Test inversion all succeeded!')
 
     def test_division(self):
 
@@ -293,6 +305,8 @@ class TestMontgomeryOperations(unittest.TestCase):
                 self.assertEqual(act, exp)
                 self.assertEqual(act1, exp1)
                 self.assertEqual(act2, exp2)
+
+        print(f'Test division all succeeded!')
 
 
 # Rerun the corrected unit tests with refined calculations
