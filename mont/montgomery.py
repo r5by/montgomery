@@ -29,6 +29,7 @@ class Montgomery(GFType):
     def __init__(self):
         super().__init__(None)
         self._N: Optional[int] = None  # modulo, stated as "M" in [2]
+        self.modulus = self._N  # alias...
 
         self.__n: Optional[int] = None  # 2 ** __n > modulo, stated as "N" in [2]
         self._R: Optional[int] = None  # R > N and is a power of 2 (the smallest power of 2 greater than N by default)

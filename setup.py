@@ -8,7 +8,7 @@ def load_requirements(filename='requirements.txt'):
 
 setup(
     name='py-mont',
-    version='0.1.0',
+    version='0.2.0',
     author='Luke Li',
     author_email='zhongwei.li@mavs.uta.edu',
     description='A Python package simulates the efficient HW design of Montgomery domain related arithmetics.',

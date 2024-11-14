@@ -18,6 +18,8 @@ if __name__ == '__main__':
     # x_, y_ = 8, 27  # x', y' as elements in prime field F_p
     x_ = random.randint(1, p - 1)
     y_ = random.randint(1, p - 1)
+    # x_ = 12345
+    # y_ = 678910
 
     # enter the Montgomery domain over F_{31}
     x, y = M8(x_), M8(y_)
